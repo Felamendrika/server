@@ -1,13 +1,14 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/user.model");
 const { generateToken } = require("../utils/jwt");
+const jwt = require("jsonwebtoken");
 
 // Inscription d'un USER
 exports.signup = async (req, res) => {
-  const { nom, prenom, pseudo, email, mdp, avatar } = req.body;
-
   try {
-    // verifier sil'utilisateur existe
+    const { nom, prenom, pseudo, email, mdp, avatar } = req.body;
+
+    // verifier si l'utilisateur existe
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -21,6 +22,7 @@ exports.signup = async (req, res) => {
     // Creer le nouvel utilisateur
     const newUser = new User({
       nom,
+      prenom,
       email,
       pseudo,
       email,
@@ -80,11 +82,17 @@ exports.login = async (req, res) => {
 
     // Genrer un token
     const token = generateToken(user);
-
+    /* const token = jwt.sign(
+          { userId: user_id} ,
+          process.env.JWT_SECRET,
+          {expiresIn : "30d"}
+    )
+    */
     res.status(200).json({
       success: true,
       message: "Connexion reussie",
       token,
+      user,
     });
   } catch (error) {
     res.status(500).json({
@@ -112,9 +120,10 @@ exports.createUser = async (req, res) => {
     await newUser.save();
     res.status(201).json(newUser);
   } catch (error) {
-    res.status(400).json({
+    res.status(500).json({
+      success: false,
       message: "Erreur lors de la creation de l'utilisateur",
-      error,
+      error: error.message,
     });
   }
 };
@@ -123,11 +132,16 @@ exports.createUser = async (req, res) => {
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.find();
-    res.status(200).json(users);
+    res.status(200).json({
+      success: true,
+      message: "Voici tout les utilisateurs",
+      users: users,
+    });
   } catch (error) {
-    res.status(400).json({
+    res.status(500).json({
+      success: false,
       message: "Erreur lors de la récupération de l'utilisateur",
-      error,
+      error: error.message,
     });
   }
 };
@@ -143,11 +157,15 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    res.status(200).json(user);
+    res.status(200).json({
+      success: true,
+      user: user,
+    });
   } catch (error) {
-    res.status(400).json({
+    res.status(500).json({
+      succes: false,
       message: " Erreur lors de la récupération de l'utilisateur",
-      error,
+      error: error.message,
     });
   }
 };
@@ -155,21 +173,37 @@ exports.getUserById = async (req, res) => {
 // Mise a jour de l'utilisateur
 exports.updateUser = async (req, res) => {
   try {
-    const updateUser = await User.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
+    const { mdp, ...otherData } = req.body;
 
-    if (!updateUser) {
+    let updateData = { ...otherData };
+
+    if (mdp) {
+      const hashedPassword = await bcrypt.hash(mdp, 10);
+      updateData.mdp = hashedPassword;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedUser) {
       return res.status(404).json({
-        message: "Utilisateur introuvable",
+        error: "Utilisateur introuvable",
       });
     }
 
-    res.status(200).json(updateUser);
+    res.status(200).json({
+      success: false,
+      message: "Mis a jour reussi",
+      MAJ: updatedUser,
+    });
   } catch (error) {
-    res.status(400).json({
+    res.status(500).json({
+      success: false,
       message: "Erreur lors de la mise à jour de l'utilisateur",
-      error,
+      error: error.message,
     });
   }
 };
@@ -185,11 +219,15 @@ exports.deleteUser = async (req, res) => {
       });
     }
 
-    res.status(200).json({ message: "Utilisateur supprimé" });
+    res.status(200).json({
+      success: true,
+      message: "Utilisateur supprimé",
+    });
   } catch (error) {
-    res.status(400).json({
+    res.status(500).json({
+      success: false,
       message: "Erreur lors de la suppression de l'utilisateur",
-      error,
+      error: error.message,
     });
   }
 };
@@ -214,12 +252,13 @@ exports.searchUser = async (req, res) => {
       total: totalUsers,
       page,
       totalPages: Math.ceil(totalUsers / limit),
-      users,
+      users: users,
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       message: "Erreur serveur lors de la recherche d'utilisateurs",
-      error,
+      error: error.message,
     });
   }
 };
