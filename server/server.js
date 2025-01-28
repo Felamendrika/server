@@ -1,35 +1,29 @@
 const express = require("express");
 const mongoose = require("mongoose");
-
+// importation pour le SOCKET.IO
+const http = require("http");
 const cors = require("cors");
 const path = require("path");
-const multer = require("multer");
-//const bodyParser = require("body-parser"); // analyser les corps de requetes au format json
-
-const port = process.env.PORT || 5000;
-const dotenv = require("dotenv");
+const bodyParser = require("body-parser"); // analyser les corps de requetes au format json
 
 // FOnction express pour demarer le serveur
 const app = express();
 
+const dotenv = require("dotenv");
+dotenv.config();
+const port = process.env.PORT || 3000;
+
+// creation du serveur HTTP
+const server = http.createServer(app);
+
+const { initializeSocket } = require("./socket/socket");
+const io = initializeSocket(server);
+
 // Middleware
 app.use(express.json());
-//app.use(bodyParser.json());
-dotenv.config();
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cors()); //configuration de CORS pour les appel API
-
-// Configuration du stockage des fichiers avec Multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "./uploads/"); // Dossier où les fichiers seront enregistrés
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // horodatage
-  },
-});
-
-// Initialisation du Multer avec la configuration de stockage
-const upload = multer({ storage: storage });
 
 // Importation des routes
 const userRoutes = require("./routes/user.routes");
@@ -51,25 +45,8 @@ mongoose
   .then(() => console.log("MongoDB connected..."))
   .catch((err) => console.log("Erreur lors de la connexion", err));
 
-// Middleware pour gerer l'upload de fichiers
-app.post("/upload", upload.single("fichier"), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({
-      message: "Aucun fichier sélectionné",
-    });
-  }
-
-  // retourner l'URL du fichier telecharger
-  res.status(200).jsonp({
-    message: "Fichier chargé avec succés",
-    fileUrl: `/uploads/${req.file.filename}`,
-  });
-});
-
-// Test route
-app.get("/", (req, res) => {
-  res.send("Backend is running");
-});
+// const setupSocketHandlers = require("./socket/handlers");
+// setupSocketHandlers(io);
 
 // Utilisation des routes
 app.use("/api/users", userRoutes);
@@ -84,19 +61,171 @@ app.use("/api/fichiers", fichierRoutes);
 
 // Middleware pour servir les fichiers statiques
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use(
+  "/uploads/avatar",
+  express.static(path.join(__dirname, "uploads/avatar"))
+);
 
 // Middleware d'erreur
 app.use(errorHandler);
 
-app.listen(port, () => {
-  console.log(`Serveur demarre sur le port ${port} `);
+// demarre le serveur
+server.listen(port, () => {
+  console.log(`Serveur démarré sur le port ${port}`);
 });
+
+// Export 'io' pour les controller
+module.exports = { app, server };
+
 /*
-// Renvoyer du contenu , reception les requetes et envoyer du DATA => GET
-app.get("/menu", (req, res) => {
-  res.status(200).json({
-    message: "Bienvenu sur la Plateforme",
+// Middleware pour suivre les connexion user
+const activeUsers = new Map();
+
+// Socket.io : Gestion de connexion
+io.on("connection", (socket) => {
+  console.log(`Utilisateur connecté : ${socket.id}`);
+
+  // ajouter un utilisateur actif
+  socket.on("userConnected", (userId) => {
+    activeUsers.set(userId, socket.id);
+    console.log(`utilisateur connecter : ${userId} (Socket: ${socket.id})`);
+
+    // Diffusion de la liste des users en ligne
+    io.emit("updatedActiveUsers", Array.from(activeUsers.keys()));
+  });
+
+  // rejoindre un room conversation ou conversation_id = conversationId
+  socket.on("joinConversation", (conversationId) => {
+    if (mongoose.isValidObjectId(conversationId)) {
+      const roomName = `conversation_${conversationId}`;
+      socket.join(roomName);
+      console.log(`Utilisateur ${socket.id} a rejoint la room ${roomName}`);
+    } else {
+      console.warm(`ID de conversation invalide : ${conversationId}`);
+    }
+  });
+
+  // Quitter un room specifique
+  socket.on(`leaveConversation`, (conversationId) => {
+    const roomName = `conversation_${conversationId}`;
+    socket.leave(roomName);
+    console.log(`Utilisateur ${socket.id} a quitté la room ${roomName}`);
+  });
+
+  // Écouter un événement personnalisé
+  socket.on("sendMessage", (data) => {
+    const { conversationId, contenu, message } = data;
+
+    if (mongoose.isValidObjectId(conversationId)) {
+      const roomName = `conversation_${conversationId}`;
+      io.to(roomName).emit("receiveMessage", { contenu });
+      console.log(`Message envoyé dans ${roomName}: ${message}`);
+    } else {
+      console.warm(`ID de conversation invalide pour sendMessage`);
+    }
+    console.log("Message recu: ", data);
+  });
+
+  // ecouter les messages envoyes dans un groupe
+  socket.on("groupMessage", (data) => {
+    const { groupId, senderId, message } = data;
+
+    if (mongoose.isValidObjectId(groupId)) {
+      // Broadcast aux autres membres du groupe
+      io.to(groupId).emit("groupMessage", {
+        senderId,
+        message,
+        timeStamp: new Date(),
+      });
+      console.log(`ID de groupe invalide pour groupMessage`);
+    }
+
+    console.log(`Message dans le groupe ${groupId} : ${message}`);
+  });
+
+  // ecouter la requete pour rejoindre un groupe
+  socket.on("joinGroup", (groupId) => {
+    if (mongoose.isValidObjectId(groupId)) {
+      socket.join(groupId); // rejoindre un room specifique au groupe
+      console.log(`Utilisateur ${socket.id} a rejoint le groupe : ${groupId}`);
+    } else {
+      console.warm(`ID de grope invalide pour joinGroup : ${groupId}`);
+    }
+  });
+
+  socket.on("leaveGroup", (groupId) => {
+    if (mongoose.isValidObjectId(groupId)) {
+      socket.leave(groupId);
+      io.to(groupId).emit("memberLeft", socket.id);
+      console.log(`User left group ${groupId}`);
+    } else {
+      console.warm(`ID du groupe invalide pour leaveGroupe`);
+    }
+  });
+
+  socket.on("groupUpdated", (groupData) => {
+    io.to(groupData.groupId).emit("groupInfoUpdated", groupData);
+    console.log(`Group ${groupData.groupId} updated`);
+  });
+
+  socket.on("groupDeleted", (groupId) => {
+    io.emit("groupRemoved", groupId);
+    console.log(`Group ${groupId} deleted`);
+  });
+
+  // Gestion des événements de membre (Membre)
+  socket.on("memberAdded", (groupId, memberId) => {
+    io.to(groupId).emit("newMemberAdded", memberId);
+    console.log(`Member ${memberId} added to group ${groupId}`);
+  });
+
+  socket.on("memberRemoved", (groupId, memberId) => {
+    io.to(groupId).emit("memberRemovedFromGroup", memberId);
+    console.log(`Member ${memberId} removed from group ${groupId}`);
+  });
+
+  // Gestion des événements d'événements (Event)
+  socket.on("eventCreated", (eventData) => {
+    io.emit("eventCreated", eventData);
+    console.log(`Event created: ${eventData.title}`);
+  });
+
+  socket.on("eventUpdated", (eventData) => {
+    io.emit("eventUpdated", eventData);
+    console.log(`Event updated: ${eventData.title}`);
+  });
+
+  socket.on("eventDeleted", (eventId) => {
+    io.emit("eventRemoved", eventId);
+    console.log(`Event ${eventId} deleted`);
+  });
+
+  // Gestion des événements de participant (Participant)
+  socket.on("participantAdded", (eventId, participantId) => {
+    io.to(eventId).emit("newParticipantAdded", participantId);
+    console.log(`Participant ${participantId} added to event ${eventId}`);
+  });
+
+  socket.on("participantRemoved", (eventId, participantId) => {
+    io.to(eventId).emit("participantRemovedFromEvent", participantId);
+    console.log(`Participant ${participantId} removed from event ${eventId}`);
+  });
+
+  // Gerer la deconnexion
+  socket.on("disconnect", () => {
+    console.log(`Utilisateur déconnecté : ${socket.id}`);
+    for (const [userId, id] of activeUsers.entries()) {
+      if (id === socket.id) {
+        activeUsers.delete(userId);
+        console.log(`Utilisateur déconnecté : ${userId} `);
+        io.emit("updateActiveUsers", Array.from(activeUsers.keys()));
+      }
+    }
+  });
+
+  socket.on("error", (err) => {
+    console.error(`Erreur Socket.IO : ${err.message}`);
   });
 });
+
 */
-//Demarrer le serveur

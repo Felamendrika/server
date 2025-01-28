@@ -36,10 +36,15 @@ const userSchema = new mongoose.Schema(
     avatar: {
       type: String,
       required: false,
+      default: null,
     },
     date_inscription: {
       type: Date,
       default: Date.now,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }

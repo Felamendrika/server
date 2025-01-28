@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Socket.io test</title>
+
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>Socket.IO Test</h1>
+
+    <h2>Message test</h2>
+    <input type="text" id="messageInput" placeholder="Entrer un message..." />
+    <button id="sendButton">Envoyer</button>
+
+    <ul id="" messages></ul>
+
+    <h2>Groupe Test</h2>
+    <input type="text" id="groupId" placeholder="Entrer Group ID" />
+    <button id="joinGroupBtn">Rejoindre</button>
+
+    <label for="groupMessage">Message de groupe : </label>
+    <input type="text" id="groupMessage" placeholder="Entrer un message..." />
+    <button id="sendGroupMessageBtn">Envoyer au Groupe</button>
+
+    <script>
+      const socket = io("http://localhost:5000");
+
+      // ecout d'evenement message
+      socket.on("receiveMessage", (data) => {
+        const messages = document.getElementById("messages");
+        const messageElement = document.createElement("li");
+
+        messageElement.textContent = `Message recu: ${data}`;
+        messages.appendChild(messageElement);
+      });
+
+      // envoyer un message
+      document.getElementById("sendButton").addEventListener("click", () => {
+        const messageInput = document.getElementById("messageInput");
+
+        socket.emit("sendMessage", messageInput.value);
+        messageInput.value = ""; // vider l'input
+      });
+
+      // rejoindre un groupe
+      document.getElementById("joinGroupBtn").addEventListener("click", () => {
+        const groupId = document.getElementById("groupId").values;
+
+        socket.emit("joinGroup", groupId);
+        alert(`Rejoint le groupe : ${groupId}`);
+      });
+
+      // envoyer un message dans le groupe
+      document
+        .getElementById("sendGroupMessageBtn")
+        .addEventListener("click", () => {
+          const groupId = document.getElementById("groupId").value;
+          const message = document.getElementById("groupMessage").value;
+
+          socket.emit("groupMessage", {
+            groupId,
+            senderId: "123",
+            message,
+          });
+        });
+
+      // recevoir un message de groupe
+      socket.on("groupMessage", (data) => {
+        console.log(
+          `Message reçu dans le groupe ${data.groupId}: ${data.message}`
+        );
+        alert(`Nouveau message de ${data.senderId}: ${data.message}`);
+      });
+    </script>
+  </body>
+</html>

@@ -8,14 +8,14 @@ const fichierSchema = mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["pdf", "image", "document"],
+    enum: ["pdf", "image", "document", "excel", "powerpoint", "application"],
     required: true,
   },
   taille: {
-    type: Number,
-    required: true,
+    type: String,
+    required: false,
   },
-  URL: {
+  chemin_fichier: {
     type: String,
     required: true,
   },

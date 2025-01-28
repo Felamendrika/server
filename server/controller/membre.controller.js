@@ -3,24 +3,98 @@ const Group = require("../models/group.model");
 const Role = require("../models/role.model");
 const User = require("../models/user.model");
 
+const mongoose = require("mongoose");
+//const { isValidObjectId } = require("mongoose")
+
+const { getIO } = require("../socket/socket");
+
+const isAdminOfGroup = async (groupId, userId) => {
+  const adminRole = await Role.findOne({ type: "admin" }).select("_id");
+  if (!adminRole) {
+    return res.status(404).json({
+      message: "Role admin non sélectionné",
+    });
+  }
+  return await Membre.findOne({
+    group_id: groupId._id,
+    user_id: userId._id,
+    role_id: adminRole,
+  });
+};
+
+const checkAdminRights = async (req, groupId) => {
+  const userId = req.user?._id || req.user?.id;
+  const isAdmin = await isAdminOfGroup(groupId, userId);
+
+  if (!isAdmin) {
+    throw {
+      status: 403,
+      message: "Seuls les administrateurs peuvent effectuer cette action.",
+    };
+  }
+};
+
 // Ajouter un membre a un groupe avec le role membre par defaut
 exports.addMembre = async (req, res) => {
   try {
-    const { group_id, user_id } = req.body;
-    const adminId = req.user._id; // Id de l'admin connecte
+    const { user_id, group_id } = req.body;
+    const userId = req.user?._id || req.user?.id; // Id de l'admin connecte
 
-    // verifie si l'utilisateur connecte est admin
-    const adminRole = await Group.findOne({ type: "admin" });
+    if (!req.user || !req.user._id || !req.user.id) {
+      return res.status(401).json({
+        message: "Utilisateur non authentifié",
+      });
+    }
+
+    // validations des IDs
+    if (!mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        message: "ID user invalide",
+      });
+    }
+    if (!mongoose.Types.ObjectId.isValid(group_id)) {
+      return res.status(400).json({
+        message: "ID group invalide",
+      });
+    }
+
+    // Verification de l'existance du groupe
+    const group = await Group.findById(group_id);
+    if (!group) {
+      return res.status(404).json({
+        error: "Le groupe spécifié n'existe pas ",
+        data: null,
+      });
+    }
+
+    // verification de l'existance de l'utilisateur
+    const user = await User.findById(user_id);
+    if (!user) {
+      return res.status(404).json({
+        error: "L'utilisateur spécifié n'existe pas",
+        data: null,
+      });
+    }
+
+    //verifie si l'utilisateur connecte est admin
+    // ao @ MODEL ROLE no akana le role admin
+    const adminRole = await Role.findOne({ type: "admin" }).select("_id");
+    if (!adminRole) {
+      return res.status(404).json({
+        message: "role admin non sélectionné",
+      });
+    }
+
     const adminMembre = await Membre.findOne({
-      group_id,
-      user_id: adminId,
-      role_id: adminRole._id,
+      group_id: group_id,
+      user_id: userId,
+      role_id: adminRole,
     });
 
     if (!adminMembre) {
       return res.status(403).json({
         message:
-          "Seuls les administrateurs du groupe peuvent ajouter des membres.",
+          "Seuls les administrateurs du groupe peuvent ajouter des membres",
       });
     }
 
@@ -28,33 +102,62 @@ exports.addMembre = async (req, res) => {
     const existingMembre = await Membre.findOne({
       group_id,
       user_id,
-    });
+    })
+      .populate("group_id", "nom")
+      .populate("user_id", "nom pseudo avatar")
+      .populate("role_id", "type");
+
     if (existingMembre) {
       return res.status(400).json({
         message: "Cet utilisateur est déjà membre du groupe.",
+        groupe: existingMembre,
       });
     }
 
-    // Attribuer le role (admin ou membre) en fonction du role_type. par defaut 'membre
-    const membreRole = await Role.findOne({ type: "membre" });
+    // Attribuer le role  par defaut 'membre
+    const membreRole = await Role.findOne({ type: "membre" }).select("_id");
 
     // Creer le membre
     const newMembre = await Membre.create({
       group_id,
       user_id,
-      role_id: membreRole._id,
+      role_id: membreRole,
       date_join: new Date(),
     });
+
+    if (!newMembre) {
+      return res.status(404).json({
+        message: "Aucun membre ajouter et creer",
+      });
+    }
+
+    const fullMembre = await Membre.findById(newMembre._id)
+      .populate("group_id", "nom description")
+      .populate("user_id", "nom prenom pseudo avatar")
+      .populate("role_id", "type");
+
+    const io = getIO();
+    // emission d'un evenement socket.io
+    // if (io) {
+    //   io.to(`group_${group_id}`).emit("membreAdded", fullMembre);
+    // } else {
+    //   console.error("Socket.IO non initialisé");
+    //   /*return res.status(500).json({
+    //     message:
+    //       "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+    //   }); */
+    // }
 
     res.status(201).json({
       success: true,
       message: "Membre ajouté au groupe avec succes",
-      membre: newMembre,
+      data: fullMembre,
+      // data: newMembre,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Erreur lors de l'ajout du membre au groupe",
+      message: "Erreur serveur lors de l'ajout du membre au groupe",
       error: error.message,
     });
   }
@@ -64,46 +167,92 @@ exports.addMembre = async (req, res) => {
 exports.updateMembreRole = async (req, res) => {
   try {
     const { role_id } = req.body;
-    const adminId = req.user._id; // ID de l'admin connecte
-    const { id } = req.params;
+    const adminId = req.user?._id || req.user?.id; // ID de l'admin connecte req.user?._id
+    const { membreId } = req.params;
 
-    const membre = await Membre.findById(id).populate("group_id", "nom");
+    if (!req.user || !req.user._id || !req.user.id) {
+      return res.status(401).json({
+        message: "Utilisateur non authentifié",
+      });
+    }
+
+    // Validation des IDs
+    if (!mongoose.Types.ObjectId.isValid(membreId)) {
+      return res.status(400).json({ message: "IDs membre invalide" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(role_id)) {
+      return res.status(400).json({ message: "ID role invalide" });
+    }
+
+    const membre = await Membre.findById(membreId)
+      .populate("user_id", "nom prenom pseudo avatar")
+      .populate("group_id", "nom")
+      .populate("role_id", "type");
     if (!membre) {
       return res.status(404).json({
         message: "Membre introuvable",
+        data: null,
       });
     }
 
     // verifie si l'utilisateur connecte est admin du groupe
-    const adminRole = await Role.findOne({ type: "admin" });
 
-    const adminMembre = await Membre.findOne({
-      group_id: membre.group_id._id,
-      user_id: adminId,
-      role_id: adminRole._id,
-    });
+    // const adminMembre = await isAdminOfGroup({
+    //   group_id: membre.group_id._id,
+    //   user_id: adminId._id,
+    // });
 
-    if (!adminMembre) {
-      return res.status(403).json({
-        message:
-          "Seuls les administrateurs du groupe peuvent modifier le role d'un membre.",
+    // if (!adminMembre) {
+    //   return res.status(403).json({
+    //     message:
+    //       "Seuls les administrateurs du groupe peuvent modifier le role d'un membre.",
+    //   });
+    // }
+
+    await checkAdminRights(req, membre.group_id);
+
+    // Verification que le role existe
+    const role = await Role.findById(role_id).select("_id").populate("type");
+    if (!role) {
+      return res.status(404).json({
+        message: "Le rôle spécifié n'existe pas",
       });
     }
-
     // metre a jour le role du membre
-    membre.role_id = role_id;
+    membre.role_id = role._id;
 
     await membre.save();
+
+    const io = getIO();
+    //emission d'un evenement socket.io
+    // if (io) {
+    //   io.to(`group_${membre.group_id}.toString()`).emit("membreRoleChanged", {
+    //     membreId,
+    //     role,
+    //   });
+    // } else {
+    //   console.error("Socket.IO non initialisé");
+    //   return res.status(500).json({
+    //     message:
+    //       "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+    //   });
+    // }
+
     res.status(200).json({
       success: true,
       message: "Rôle du membre mis à jour avec succès",
-      membre,
+      data: {
+        membre_id: membre._id,
+        user_id: membre.user_id,
+        group_id: membre.group_id,
+        role_id: role,
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Erreur lors de la mise à jour du rôle du membre",
-      error: error.message,
+      error: "Erreur du serveur lors de la mise à jour du rôle du membre",
+      message: error.message,
     });
   }
 };
@@ -111,31 +260,58 @@ exports.updateMembreRole = async (req, res) => {
 // Supprimer un membre de groupe seulement par un admin
 exports.removeMembreFromGroup = async (req, res) => {
   try {
-    const { id } = req.params;
-    const adminId = req.user._id; // Id admin connecte
+    const { membreId } = req.params;
+    //const { user_id, group_id } = req.params;
+    const adminId = req.user?._id || req.user?.id; // Id admin connecte
 
-    const membre = await Membre.findById(id).populate("group_id", "nom");
-    if (!membre) {
-      return res.status(404).json({ message: "Membre non trouvé." });
-    }
-
-    // Verifie si l'utilisateur connecte est admin du groupe
-    const adminRole = await Role.findOne({ type: "admin" });
-    const adminMembre = await Membre.findOne({
-      group_id: membre.group_id._id,
-      user_id: adminId,
-      role_id: adminRole._id,
-    });
-
-    if (!adminMembre) {
-      return res.status(403).json({
-        message:
-          "Seuls les administrateurs du groupe peuvent supprimer des membres.",
+    if (!req.user || !req.user._id || !req.user.id) {
+      return res.status(401).json({
+        message: "Utilisateur non authentifié",
       });
     }
 
+    // Validation de l'ID
+    if (!mongoose.Types.ObjectId.isValid(membreId)) {
+      return res.status(400).json({ message: "ID membre invalide." });
+    }
+
+    const membre = await Membre.findById(membreId);
+    if (!membre) {
+      return res
+        .status(404)
+        .json({ message: "Le membre spécifié n'existe pas" });
+    }
+
+    // const adminMembre = await isAdminOfGroup({
+    //   group_id: membre.group_id._id,
+    //   user_id: adminId,
+    // });
+
+    // if (!adminMembre) {
+    //   return res.status(403).json({
+    //     message:
+    //       "Seuls les administrateurs du groupe peuvent supprimer des membres.",
+    //   });
+    // }
+
+    await checkAdminRights(req, membre.group_id);
+
     // Supprimer le membre
-    await Membre.findByIdAndDelete(id);
+    await Membre.findByIdAndDelete(membreId);
+
+    const io = getIO();
+    // evenement Socket
+    // if (io) {
+    //   io.to(`group_${membre.group_id}.toString()`).emit("membreDeleted", {
+    //     membreId,
+    //   });
+    // } else {
+    //   console.error("Socket.IO non initialisé");
+    //   return res.status(500).json({
+    //     message:
+    //       "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+    //   });
+    // }
 
     res.status(200).json({
       success: true,
@@ -144,8 +320,8 @@ exports.removeMembreFromGroup = async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Erreur lors de la suppression du membre",
-      error: error.message,
+      error: "Erreur du serveur lors de la suppression du membre",
+      message: error.message,
     });
   }
 };
@@ -155,10 +331,16 @@ exports.getMembreById = async (req, res) => {
   try {
     const { membreId } = req.params;
 
-    // Recherche du membre par ID et récupération des détails utilisateur et rôle
+    if (!mongoose.Types.ObjectId.isValid(membreId)) {
+      return res.status(400).json({
+        message: "ID membre invalide",
+      });
+    }
+
+    // Recherche du membre par ID et récupération des details utilisateur et rôle
     const membre = await Membre.findById(membreId)
-      .populate("user_id", "nom")
-      .populate("group_id", "nom")
+      .populate("user_id", "nom prenom pseudo avatar")
+      .populate("group_id", "nom description")
       .populate("role_id", "type");
 
     if (!membre) {
@@ -169,34 +351,14 @@ exports.getMembreById = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      message: "Voici le membre",
       data: membre,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Erreur lors de la récupération du membre",
+      message: "Erreur du serveur lors de la récupération du membre",
       error: error.message,
-    });
-  }
-};
-
-// Creation d'un membre
-exports.createMembre = async (req, res) => {
-  try {
-    const { user_id, role_id, group_id } = req.body;
-    const newMembre = new Membre({
-      date_join: Date.now(),
-      user_id,
-      role_id,
-      group_id,
-    });
-
-    await newMembre.save();
-    res.status(201).json(newMembre);
-  } catch (error) {
-    res.status(400).json({
-      message: "Erreur lors de la creation du membre",
-      error,
     });
   }
 };
@@ -207,25 +369,39 @@ exports.getMembre = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
 
     const membres = await Membre.find()
-      .populate("user_id", "nom")
-      .populate("group_id", "nom")
+      .populate("user_id", "nom pseudo avatar")
+      .populate("group_id", "nom description")
       .populate("role_id", "type")
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
 
+    if (!membres || membres.length === 0) {
+      return res.status(404).json({
+        message: "Aucun membre recuperer ",
+      });
+    }
+
     const count = await Membre.countDocuments();
+
+    const result = membres.map((membre) => ({
+      user_id: membre.user_id.nom,
+      group_id: membre.group_id.nom,
+      role: membre.role_id.type,
+    }));
 
     res.status(200).json({
       success: true,
+      message: "Voici tous les membres",
       membres: membres,
+      data: result,
       totalPages: Math.ceil(count / limit),
       currentPages: page,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
-      message: "Erreur lors de la récupération des membres",
+      message: "Erreur du serveur lors de la récupération des membres",
       error: error.message,
     });
   }
@@ -234,186 +410,125 @@ exports.getMembre = async (req, res) => {
 // Récupération des membres par groupe
 exports.getMembresByGroup = async (req, res) => {
   try {
-    const { group_id } = req.params; //  req.params
-    const { page = 1, limit = 10, role_type } = req.query;
+    const { groupId } = req.params; //  req.params
+    const { page = 1, limit = 10 } = req.query;
 
-    // Recherche l'ID du rôle si un filtrage par rôle est demandé
-    let roleFilter = {};
-    if (role_type) {
-      const role = await Role.findOne({ type: role_type });
-      if (!role) {
-        return res.status(400).json({ message: "Type de rôle invalide." });
-      }
-      roleFilter = { role_id: role._id };
+    if (!mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(400).json({
+        message: "ID user invalide",
+      });
     }
 
-    const membres = await Membre.find({ group_id })
-      .populate("user_id", "nom ")
+    // Verifier si le groupe existe
+    const groupExist = await Group.findById(groupId);
+    if (!groupExist) {
+      return res.status(404).json({
+        message: "Groupe non trouvé",
+      });
+    }
+
+    // Recherche l'ID du rôle si un filtrage par rôle est demander
+
+    const membres = await Membre.find({ group_id: groupId })
+      .populate("user_id", "nom prenom pseudo avatar")
       .populate("role_id", "type")
+      .populate("group_id", "nom")
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .exec();
 
-    if (membres.length === 0) {
+    if (membres.length === 0 || !membres) {
       return res.status(404).json({
         message: "Aucun membre trouvé dans ce groupe",
       });
     }
 
-    const count = await Membre.countDocuments({ group_id, ...roleFilter });
+    // Mapping des resultat
+    const result = membres.map((membre) => ({
+      user_id: membre.user_id.nom,
+      role: membre.role_id.type,
+    }));
+
+    const count = await Membre.countDocuments({ groupId });
 
     res.status(200).json({
       success: true,
+      message: "Voici les membres par groupes",
       membres: membres,
+      data: result,
       totalPages: Math.ceil(count / limit),
       currentPages: page,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Erreur lors de la récupération des membres du groupe",
+      message: "Erreur serveur lors de la récupération des membres par groupe",
       error: error.message,
     });
   }
 };
 
-// Récupérer un membre par ID
-exports.getMembreById = async (req, res) => {
+// Quitter un groupe
+exports.leaveGroup = async (req, res) => {
   try {
-    const membre = await Membre.findById(req.params.id)
-      .populate("user_id", "nom prenom")
-      .populate("role_id", "type");
+    const userId = req.user?._id || req.user?.id;
+    const { groupId } = req.params;
+
+    // verification que le mebre existe
+    const membre = await Membre.findOne({ user_id: userId, group_id: groupId });
     if (!membre) {
+      return res
+        .status(404)
+        .json({ message: "Membre introuvable dans le groupe" });
+    }
+
+    const adminRole = await Role.findOne({ type: "admin" }).select("_id");
+    if (!adminRole) {
       return res.status(404).json({
-        message: "Membre non trouvé.",
+        message: "role admin non sélectionné",
       });
     }
-    res.status(200).json({ membre });
+
+    const adminMembre = await Membre.findOne({
+      group_id: groupId,
+      user_id: userId,
+      role_id: adminRole,
+    });
+
+    if (adminMembre) {
+      return res.status(403).json({
+        message: "Les administrateurs ne peuvent pas quitter le groupe",
+      });
+    }
+    //supprimer le membre
+    const deletedMembre = await Membre.deleteOne({ _id: membre._id });
+
+    if (!deletedMembre) {
+      return res.status(404).json({
+        message: "Membre non supprimer",
+      });
+    }
+
+    const io = getIO();
+    // Notifier via socket
+    // if (io) {
+    //   io.to(`group_${group_id}`).emit("membreLeftGroup", {
+    //     groupId,
+    //     userId,
+    //     message: "Un membre a quitté le groupe",
+    //   });
+    // }
+
+    return res.status(200).json({
+      succes: true,
+      message: "Vous avez quitter le groupe",
+    });
   } catch (error) {
-    res.status(500).json({
-      message: "Erreur lors de la récupération du membre.",
+    console.error("Erreur pour quitter le groupe:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Erreur serveur pour quitter le groupe",
       error: error.message,
     });
   }
 };
-
-// Modification d'un membre
-
-// Suppression d'un membre
-
-/* 
-
-// supression de mebre si l;utilisateur est admin
-exports.deleteMembre = async (req, res) => {
-  try {
-    const { membre_id, user_id } = req.body;
-
-    // verification du role
-    const membreRequesting = await Membre.findOne({
-      user_id,
-      group_id: req.params.groupId,
-    }).populate("role_id");
-
-    if (!membreRequesting || membreRequesting.role_id.type !== "admin") {
-      return res.status(403).json({
-        message: "Vous n'avez pas les droits pour supprimer ce membre",
-      });
-    }
-
-    // Supprimer le membre
-    const deleteMembre = await Membre.findBuIdAndDelete(membre_id);
-
-    if (!deleteMembre) {
-      return res.status(404).json({ message: "Membre introuvable" });
-    }
-
-    res.status(200).json({ message: "Membre supprimé" });
-  } catch (error) {
-    res.status(400).json({
-      message: "Erreur lors de la suppression du membre",
-      error,
-    });
-  }
-};
-
-
-// Recuperer un membre par Id
-exports.getMembreById = async (req, res) => {
-  try {
-    const membre = await Membre.findById(req.params.id)
-      .populate("user_id role_id")
-      .populate("group_id");
-    if (!membre) {
-      return res.status(404).json({
-        message: "Membre introuvable",
-      });
-    }
-
-    res.status(200).json({ membre });
-  } catch (error) {
-    res.status(500).json({
-      message: "Erreur lors de la recuperation du membre",
-      error: error.message,
-    });
-  }
-};
-
-// Modification du role d'un membre
-exports.updateMembreRole = async (req, res) => {
-  try {
-    const { membreId } = req.params;
-    const { roleId } = req.body;
-    const userId = req.user._id;
-
-    // Verifie si l'utilisateur set admin
-    const membre = await Membre.findOne({
-      user_id: userId,
-      group_id: req.body.group_id,
-    });
-
-    const adminRole = await Role.findOne({ type: "admin" });
-
-    if (!membre || membre.role_id.toString() !== adminRole._id.toString()) {
-      return res.status(403).json({
-        error: "Vous n'êtes pas autorisé à modifier ce membre",
-      });
-    }
-
-    // Modifier le rôle du membre
-    const updatedMembre = await Membre.findByIdAndUpdate(
-      membreId,
-      { role_id: roleId },
-      { new: true }
-    );
-    res.status(200).json(updatedMembre);
-  } catch (error) {}
-};
-
-// Suppression d'un membre (seul un admin peut supprimer)
-exports.deleteMembre = async (req, res) => {
-  try {
-    const { membreId } = req.params;
-    const userId = req.user._id;
-
-    const membre = await Membre.findOne({
-      user_id: userId,
-      group_id: req.body.group_id,
-    });
-
-    const adminRole = await Role.findOne({ type: "admin" });
-
-    if (!membre || membre.role_id.toString() !== adminRole._id.toString()) {
-      return res.status(403).json({
-        error: "Vous n'êtes pas autorisé à supprimer ce membre",
-      });
-    }
-
-    await Membre.findByIdAndDelete(membreId);
-    res.status(200).json({ message: "Membre supprimé" });
-  } catch (error) {
-    res.status(500).json({ error: "Erreur lors de la suppression du membre" });
-  }
-};
-
-
-*/

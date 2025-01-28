@@ -2,10 +2,10 @@
 const jwt = require("jsonwebtoken");
 
 // FOnction pour generer le JWT pour un utilisateur
-// pren un user et creer un token avec l'ID en charge utils, utilise JWT_SECRET pour signer le jeton
+// prend un user et creer un token avec l'ID en charge utils, utilise JWT_SECRET pour signer le jeton
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user._id }, //email: user.email },// payload : l'id est l'email utilisateur
+    { id: user._id }, // payload : l'id
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || "30d" }
   );
