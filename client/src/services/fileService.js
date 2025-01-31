@@ -75,8 +75,8 @@ export const getFilesByConversation = async (conversationId) => {
   try {
     const response = await api.get(`/fichiers/conversation/${conversationId}`);
     console.log(response.data.fichiers);
-    console.log(response.data);
-    console.log("Fichier dans conversation :", response.data.fichiers);
+    // console.log(response.data);
+    // console.log("Fichier dans conversation :", response.data.fichiers);
     return response.data;
   } catch (error) {
     console.log("Erreur dans getFilesByConversation: ", error);

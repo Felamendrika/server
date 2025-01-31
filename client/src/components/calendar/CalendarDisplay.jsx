@@ -1,4 +1,4 @@
-
+/* eslint-disable no-unused-vars */
 
 import { Calendar, momentLocalizer } from 'react-big-calendar';
 import moment from 'moment';
@@ -6,6 +6,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'moment/locale/fr' // affichage du calendrier en francais 
 
 import { useEvent } from "../../context/EventContext"
+import { useSocket } from '../../context/SocketContext';
 
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
 import {LuCalendarPlus} from 'react-icons/lu'
@@ -30,6 +31,8 @@ const CalendarDisplay = () => {
 
   } = useEvent()
 
+  const { socket } = useSocket();
+
   const [isEventFormModal, setIsEventFormModal] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState(null)
   // const [isTestModalOpen, setIsTestModalOpen] = useState(false)
@@ -47,6 +50,28 @@ const CalendarDisplay = () => {
     }
     fetchData()
   }, [fetchEvents])
+
+  useEffect(() => {
+    if(socket) {
+      socket.on("eventCreated", (data) => {
+        fetchEvents(); // Recharger les événements après création
+      });
+  
+      socket.on("eventModified", (data) => {
+        fetchEvents(); // Recharger après modification
+      });
+  
+      socket.on("eventRemoved", (data) => {
+        fetchEvents(); // Recharger après suppression
+      });
+  
+      return () => {
+        socket.off("eventCreated");
+        socket.off("eventModified");
+        socket.off("eventRemoved");
+      };
+    }
+  }, [socket, fetchEvents])
 
   if (loading) {
     return (
@@ -80,17 +105,6 @@ const CalendarDisplay = () => {
     setSelectedEvent(null)
     setIsEventFormModal(!isEventFormModal)
   }
-
-
-  // // Fermer le modal de test
-  // const closeTestModal = () => {
-  //   setIsTestModalOpen(false);
-  // };
-
-  //   // Ouvrir le modal de test
-  //   const openTestModal = () => {
-  //     setIsTestModalOpen(true);
-  //   };
 
   return (
     <div className="w-full h-full p-4 bg-white shadow-lg rounded-lg overflow-hidden">

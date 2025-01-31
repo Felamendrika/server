@@ -473,32 +473,6 @@ exports.getUserGroupConversation = async (req, res) => {
       (conversation) => conversation !== null
     );
 
-    // recuperation de tous les membres du groupes sauf l'utilisateur connecte
-
-    /*for (const conversation of groupConversations) {
-      const groupMembres = await Membre.find({
-        group_id: conversation.group_id._id,
-        user_id: { $ne: userId },
-      }).populate("user_id", "nom pseudo avatar");
-
-      // ajouter les autres participants
-      conversation.otherParticipants = groupMembres.map((membre) => ({
-        _id: membre.user_id._id,
-        nom: membre.user_id.nom,
-        pseudo: membre.user_id.pseudo,
-        avatar: membre.user_id.avatar,
-      }));
-
-      const lastMessage = await Message.findOne({
-        conversation_id: conversation._id,
-      })
-        .sort({ createdAt: -1 })
-        .select("contenu date_envoi user_id")
-        .populate("user_id", "nom pseudo avatar");
-
-      conversation.dernierMessage = lastMessage || null;
-    } */
-
     if (!filteredConversations || filteredConversations.length === 0) {
       return res.status(404).json({
         message: "Aucun conversation de groupe concernant cet utilisateur",
@@ -550,23 +524,6 @@ exports.deleteConversation = async (req, res) => {
         message: "Conversation non trouvée.",
       });
     }
-
-    // verifie si une conversation est group, seul admin peuvent la supprimer
-    // if (conversation.type === "group") {
-    //   const isAdmin = await Membre.findOne({
-    //     user_id: userId._id,
-    //     group_id: conversation.group_id._id,
-    //     role_id: await findAdminRoleId(),
-    //     //role_id: await Role.findOne({ type: "admin" }).select("_id"),
-    //   });
-
-    //   if (!isAdmin) {
-    //     return res.status(403).json({
-    //       message:
-    //         "Seuls les administrateurs peuvent supprimer une conversation de groupe.",
-    //     });
-    //   }
-    // }
 
     // Supprimer tout les messages
     await Message.deleteMany({ conversation_id: conversation._id });
@@ -686,7 +643,7 @@ exports.getMessages = async (req, res) => {
       })
       .populate({
         path: "user_id",
-        select: " _id pseudo nom avatar isDeleted",
+        select: " _id pseudo nom prenom avatar isDeleted",
       })
       .populate("fichier", "nom type taille chemin_fichier")
       .sort({ date_envoi: 1 });

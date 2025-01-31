@@ -194,7 +194,10 @@ exports.getUsers = async (req, res) => {
       });
     }
 
-    const users = await User.find({ _id: { $ne: currentUserId } });
+    const users = await User.find({
+      _id: { $ne: currentUserId },
+      isDeleted: { $ne: true },
+    });
     if (!users || users.length === 0) {
       return res.status(404).json({
         message: "Aucun utilisateur trouvé",

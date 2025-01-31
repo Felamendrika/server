@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+
 /* eslint-disable react/prop-types */
 /* eslint-disable react-refresh/only-export-components */
 
@@ -6,6 +6,8 @@ import {  createContext, useCallback, useContext, useEffect, useState } from "re
 import * as eventService from "../services/eventService";
 import { addParticipant, removeParticipant, getUserParticipatingEvents, getParticipants } from "../services/participantService";
 import { toast } from "react-toastify";
+
+import { useSocket } from "./SocketContext";
 
 const EventContext = createContext()
 
@@ -18,6 +20,35 @@ export const EventProvider = ({ children }) => {
     const [eventParticipants, setEventParticipants] = useState([])
     const [participantEvents, setParticipantEvents] = useState([])
     const [loading, setLoading] = useState(false)
+
+    const { socket } = useSocket()
+
+    useEffect(() => {
+        if (socket) {
+
+            socket.on("eventCreated", (data) => {
+                setEvents(prev => [...prev, data.event]);
+            });
+
+            socket.on("eventModified", (data) => {
+                setEvents(prev => 
+                    prev.map(event => 
+                        event._id === data.event._id ? data.event : event
+                    )
+                );
+            });
+
+            socket.on("eventRemoved", ({ eventId }) => {
+                setEvents(prev => prev.filter(event => event._id !== eventId));
+            });
+
+            return () => {
+                socket.off("eventCreated");
+                socket.off("eventModified");
+                socket.off("eventRemoved");
+            };
+        }
+    }, [socket])
 
     const fetchEvents = useCallback( async () => {
         if (events.length > 0 ) return 

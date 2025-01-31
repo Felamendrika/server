@@ -9,7 +9,7 @@ const initializeSocket = (server) => {
   // Config de socket.io
   io = new Server(server, {
     cors: {
-      origin: "http://localhost:5173" || "*",
+      origin: "http://localhost:5173",
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -23,9 +23,8 @@ const initializeSocket = (server) => {
     console.log("Connection error:", err);
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
-    // console.log("Token reçu:", token);
 
     if (!token) {
       console.log("Erreur: Token manquant");
@@ -43,16 +42,6 @@ const initializeSocket = (server) => {
     } catch (error) {
       return next(new Error("Authentification échouée"));
     }
-
-    // const decoded = require("../utils/jwt").verifyToken(token);
-    // // console.log("Token décodé:", decoded);
-    // if (!decoded) {
-    //   return next(new Error("Token invalide"));
-    // }
-
-    // socket.user = decoded.id;
-    // console.log("Socket authentifié pour userId:", decoded.id);
-    // next();
   });
 
   io.on("connection", (socket) => {
@@ -62,8 +51,8 @@ const initializeSocket = (server) => {
       if (!connectedUsers.includes(socket.user?.id)) {
         connectedUsers.push(socket.user?.id);
         io.emit("userOnline", { userId: socket.user?.id });
+        io.emit("updateOnlineUsers", connectedUsers);
       }
-      io.emit("updateOnlineUsers", connectedUsers);
     });
 
     // // Ajouter l'utilisateur au tableau
@@ -93,11 +82,28 @@ const initializeSocket = (server) => {
       );
     });
 
+    socket.on("sendNotification", (data) => {
+      const { receiverId, type, contenu } = data;
+      io.to(`user_${receiverId}`).emit("newNotification", {
+        type,
+        contenu,
+        senderId: socket.user.id,
+        timestamp: new Date(),
+      });
+      console.log(`Notification a ${receiverId}`);
+    });
+
     socket.on("newMessage", (data) => {
       const { conversationId, message } = data;
       io.to(`conversation_${conversationId}`).emit("messageReceived", {
         message: data.message,
         conversationId: data.conversation_id,
+      });
+
+      io.to(`user${receiverId}`).emit("messageNotification", {
+        conversationId,
+        message,
+        sender: socket.user,
       });
       console.log(
         `Message envoyé dans conversation ${conversationId} par ${socket.user.id}:`,
@@ -106,11 +112,13 @@ const initializeSocket = (server) => {
     });
 
     socket.on("messageUpdated", (data) => {
-      const { conversation_id, message } = data;
-      io.to(`conversation_${conversation_id}`).emit("messageModified", {
+      const { conversationId, message } = data;
+      io.to(`conversation_${conversationId}`).emit("messageModified", {
         message,
-        conversation_id: conversation_id,
+        conversation_id: conversationId,
       });
+
+      console.log(`Message maj dans conversation ${conversationId}:`, message);
     });
 
     socket.on("messageDeleted", (data) => {
@@ -119,11 +127,13 @@ const initializeSocket = (server) => {
         messageId,
         conversation_id: conversationId,
       });
+
+      console.log(`Message supprimer dans conversation ${conversationId}`);
     });
 
     socket.on("newPrivateConversation", (data) => {
       const { conversation, receiverId } = data;
-      io.to(`user_${receiverId}`).emit("ConversationCreated", conversation);
+      io.to(`user_${receiverId}`).emit("ConversationCreated", { conversation });
     });
 
     socket.on("conversationDeleted", ({ conversationId }) => {
@@ -142,6 +152,56 @@ const initializeSocket = (server) => {
         conversationId,
         groupId,
       });
+    });
+
+    // gestion de fichiers
+    socket.on("fileUploaded", (data) => {
+      const { conversationId, messageId, fichier } = data;
+      io.to(`conversation_${data.conversationId}`).emit("newFile", {
+        fichier,
+        messageId,
+        conversationId,
+      });
+      console.log(
+        `Nouveau fichier uploadé dans conversation ${conversationId}`
+      );
+    });
+
+    socket.on("fileDeleted", (data) => {
+      io.to(`conversation_${data.conversationId}`).emit("fileRemoved", {
+        fichierId: data.fichierId,
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+      });
+      console.log(`Fichier supprimé de la conversation ${data.conversationId}`);
+    });
+
+    socket.on("conversationFilesUpdated", (data) => {
+      io.to(`conversation_${data.conversationId}`).emit(
+        "refreshConversationFiles",
+        {
+          conversationId: data.conversationId,
+        }
+      );
+      console.log(
+        `Liste des fichiers mise à jour pour la conversation ${data.conversationId}`
+      );
+    });
+
+    // GESTION DE FICHIERS
+    socket.on("eventCreated", (eventData) => {
+      io.emit("newEvent", eventData);
+      console.log(`Nouvel événement créé:`, eventData);
+    });
+
+    socket.on("eventUpdated", (eventData) => {
+      io.to(`event_${eventData.eventId}`).emit("eventModified", eventData);
+      console.log(`Événement mis à jour:`, eventData);
+    });
+
+    socket.on("eventDeleted", ({ eventId }) => {
+      io.emit("eventRemoved", { eventId });
+      console.log(`Événement supprimé:`, eventId);
     });
 
     socket.on("disconnect", () => {

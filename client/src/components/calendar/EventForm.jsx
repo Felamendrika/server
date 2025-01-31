@@ -2,6 +2,7 @@
 /* eslint-disable react/prop-types */
 import { useState, useEffect } from "react";
 import { useEvent } from "../../context/EventContext";
+import { useSocket } from "../../context/SocketContext";
 
 import {IoIosCloseCircleOutline} from "react-icons/io"
 import { toast } from "react-toastify";
@@ -19,6 +20,8 @@ const EventForm = ({ onClose, selectedEvent }) => {
     //addParticipantToEvent, 
     //removeParticipantFromEvent,
   } = useEvent();
+
+  const { socket } = useSocket();
 
   const [eventData, setEventData] = useState({
     titre: "",
@@ -76,7 +79,11 @@ const EventForm = ({ onClose, selectedEvent }) => {
 
     try {
         console.log("Creating Event:", eventData);
-        await createEvent(eventData)
+        const newEvent = await createEvent(eventData)
+        socket?.emit("eventCreated", {
+          event: newEvent
+        });
+  
         onClose()
         //toast.success("Événement créé avec succès !")
     } catch (error) {
@@ -90,7 +97,9 @@ const EventForm = ({ onClose, selectedEvent }) => {
     try {
         console.log("Deleting Event ID:", selectedEvent._id);
         await deleteEvent(selectedEvent._id)
-        // toast.success("Événement supprimé avec succès !")
+        socket?.emit("eventDeleted", {
+          eventId: selectedEvent._id
+        });
         onClose()
       } catch(error) {
         console.log("Une erreur s'est produite dans deleteEvent :", error)
@@ -103,7 +112,11 @@ const EventForm = ({ onClose, selectedEvent }) => {
   const handleUpdate = async () => {
     try {
       console.log("Updating Event:", eventData);
-      await updateEvent(selectedEvent._id, eventData)
+      const updatedEvent = await updateEvent(selectedEvent._id, eventData)
+      socket?.emit("eventUpdated", {
+        event: updatedEvent,
+        eventId: selectedEvent._id
+      });
     } catch (error) {
       console.log("Erreur dans updateEvent :", error)
     }finally {

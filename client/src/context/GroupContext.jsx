@@ -7,6 +7,7 @@ import * as roleService from '../services/roleService';
 import { toast } from 'react-toastify';
 
 import { useSocket } from './SocketContext';
+import { useMessage } from './MessageContext';
 
 const GroupContext = createContext();
 
@@ -17,7 +18,7 @@ export const GroupProvider = ({ children }) => {
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(false);
 
-    
+    const { clearConversationState } = useMessage();
     const { socket } = useSocket();
 
     useEffect(() => {
@@ -220,6 +221,8 @@ export const GroupProvider = ({ children }) => {
             await leaveGroupService(groupId);
             socket?.emit("membreLeft", { groupId });
             setGroups(prev => prev.filter(group => group._id !== groupId));
+            setCurrentGroup(null);
+            clearConversationState()
             toast.success("Vous avez quitté le groupe");
         } catch (error) {
             console.error("Erreur pour quitter le groupe:", error);

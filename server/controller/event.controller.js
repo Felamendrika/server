@@ -3,6 +3,7 @@ const User = require("../models/user.model");
 const Participant = require("../models/participant.model");
 
 const { isValidObjectId } = require("mongoose");
+const { getIO } = require("../socket/socket");
 
 // Socket.io
 
@@ -37,10 +38,7 @@ exports.createEvent = async (req, res) => {
     }
 
     // Vérification de l'existence de l'utilisateur créateur
-    const user = await User.findById(createur_id).populate(
-      "createur_id",
-      "nom prenom pseudo avatar"
-    );
+    const user = await User.findById(createur_id);
     if (!user) {
       return res.status(404).json({
         message: "L'utilisateur créateur n'existe pas",
@@ -62,7 +60,7 @@ exports.createEvent = async (req, res) => {
       });
     }
 
-    const newEvent = new Event({
+    const event = new Event({
       titre,
       description,
       date_debut,
@@ -70,27 +68,34 @@ exports.createEvent = async (req, res) => {
       createur_id,
     });
 
-    if (!newEvent) {
+    if (!event) {
       return res.status(404).json({
         message: "Evenement non creer",
       });
     }
 
-    await newEvent.save();
+    const newEvent = await event.save();
+
+    // Populate after saving
+    const populatedEvent = await Event.findById(newEvent._id).populate(
+      "createur_id",
+      "nom prenom pseudo avatar"
+    );
 
     // diffusion via socket
-    // if (io) {
-    //   io.emit("eventCreated", {
-    //     event: newEvent,
-    //     message: `Un nouvel événement a été créé`,
-    //   });
-    // } else {
-    //   console.error("Socket.IO non initialisé");
-    //   /*return res.status(500).json({
-    //     message:
-    //       "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
-    //   });*/
-    // }
+    const io = getIO();
+    if (io) {
+      io.emit("eventCreated", {
+        event: populatedEvent,
+        message: `Nouvel événement créé: ${newEvent.titre}`,
+      });
+    } else {
+      console.error("Socket.IO non initialisé");
+      // return res.status(500).json({
+      //   message:
+      //     "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      // });
+    }
 
     res.status(201).json({
       success: true,
@@ -366,15 +371,20 @@ exports.updateEvent = async (req, res) => {
     }
 
     // socket.io
-    // if (io) {
-    //   io.emit("eventUpdated", {
-    //     eventId: updatedEvent._id,
-    //     message: `L'événement "${updatedEvent.titre}" a été mis à jour`,
-    //   });
-    // } else {
-    //   console.error("Socket.IO non initialisé");
-    //   //return res.status(500).json({ message: "Erreur serveur interne. Socket.IO non disponible pour la diffusion" });
-    // }
+    const io = getIO();
+    if (io) {
+      io.emit("eventUpdated", {
+        event: updatedEvent,
+        eventId: eventId, //updatedEvent._id
+        message: `L'événement "${updatedEvent.titre}" a été mis à jour`,
+      });
+    } else {
+      console.error("Socket.IO non initialisé");
+      // return res.status(500).json({
+      //   message:
+      //     "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      // });
+    }
 
     res.status(200).json({
       success: true,
@@ -454,15 +464,19 @@ exports.deleteEvent = async (req, res) => {
     }
 
     // socket
-    // if (io) {
-    //   io.emit("eventDeleted", {
-    //     eventId,
-    //     message: "Un événement a été supprimé",
-    //   });
-    // } else {
-    //   console.error("Socket.IO non initialisé");
-    //   //return res.status(500).json({ message: "Erreur serveur interne. Socket.IO non disponible pour la diffusion" });
-    // }
+    const io = getIO();
+    if (io) {
+      io.emit("eventDeleted", {
+        eventId: eventId,
+        message: "Événement supprimé",
+      });
+    } else {
+      console.error("Socket.IO non initialisé");
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -504,12 +518,3 @@ exports.searchEvents = async (req, res) => {
     });
   }
 };
-
-/*if (createur) {
-      query.createur_id = createur;
-    }
-    if (date_debut || date_fin) {
-      query.date_debut = {};
-      if (date_debut) query.date_debut.$gte = new Date(date_debut);
-      if (date_fin) query.date_debut.$lte = new Date(date_fin);
-    } */

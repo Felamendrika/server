@@ -5,48 +5,23 @@ import {BsFileText} from 'react-icons/bs'
 // import {toast} from 'react-toastify'
 
 import { useMessage } from "../../context/MessageContext"
-// import { useSocket } from "../../context/SocketContext"
+import { useSocket } from "../../context/SocketContext"
 
 const MediaList = () => {
   const {
     fetchFilesByConversations,
-    fetchConversationMessages,
+    // fetchConversationMessages,
     currentConversation,
     deleteFile,
     fichiers,
     loading
   } = useMessage()
 
-  // const { socket } = useSocket()
+  const { socket } = useSocket()
 
   const [images, setImages] = useState([])
   const [otherFiles, setOtherFiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState("")
-  //const [filteredFiles, setFilteredFiles] = useState([])
-
-  /*
-  // Écouter les événements socket pour les fichiers
-  useEffect(() => {
-    if (socket && currentConversation?._id) {
-      socket.on("fileDeleted", ({ fileId, conversationId }) => {
-        if (conversationId === currentConversation._id) {
-          fetchFilesByConversations(currentConversation._id)
-        }
-      })
-
-      socket.on("newFile", ({ conversationId }) => {
-        if (conversationId === currentConversation._id) {
-          fetchFilesByConversations(currentConversation._id)
-        }
-      })
-
-      return () => {
-        socket.off("fileDeleted")
-        socket.off("newFile")
-      }
-    }
-  }, [socket, currentConversation, fetchFilesByConversations])
-  */
 
   useEffect(() => {
     if (currentConversation?._id) {
@@ -54,9 +29,35 @@ const MediaList = () => {
     }
   }, [fetchFilesByConversations, currentConversation?._id])
 
+  // Écouter les événements socket pour les fichiers
+  useEffect(() => {
+    if (socket && currentConversation?._id) {
+      socket.on("newFile", (data) => {
+        if (currentConversation._id === data.conversationId) {
+          setImages(prev => [...prev, data.fichier].filter(f => f.type.startsWith("image")));
+          setOtherFiles(prev => [...prev, data.fichier].filter(f => !f.type.startsWith("image")));
+        }
+      });
+  
+      socket.on("fileRemoved", (data) => {
+        if (currentConversation._id === data.conversationId) {
+          setImages(prev => prev.filter(f => f._id !== data.fichierId));
+          setOtherFiles(prev => prev.filter(f => f._id !== data.fichierId));
+        }
+      });
+  
+      return () => {
+        socket.off("newFile");
+        socket.off("fileRemoved");
+      };
+    }
+  }, [socket, currentConversation, fetchFilesByConversations])
+
+
   // separer les images et les autres fichiers
   useEffect(() => {
     if(Array.isArray(fichiers)) {
+
       setImages(fichiers.filter((fichier) => fichier.type.startsWith("image")))
       setOtherFiles(fichiers.filter((fichier) => !fichier.type.startsWith("image")))
     } else {
@@ -80,16 +81,12 @@ const MediaList = () => {
   const handleDeleteFile = async (fichierId) => {
     try {
       await deleteFile(fichierId)
-      await fetchConversationMessages(currentConversation._id)
-
-      /*
+      
       // Émettre l'événement de suppression via socket
       socket?.emit("fileDeleted", {
-        fileId: fichierId,
+        fichierId,
         conversationId: currentConversation._id
       })
-      */
-      // toast.success("Fichier supprimer avec succes !")
     } catch (error) {
       console.error("Erreur lors de la suppression du fichier :", error);
     }
@@ -166,7 +163,7 @@ const MediaList = () => {
                 key={fichier._id}
                 className="flex items-center p-2 hover:bg-gray-100 hover:rounded-md cursor-pointer justify-between"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between ">
                   <a 
                     href={fichier.chemin_fichier}
                     target="_blank"
@@ -174,9 +171,9 @@ const MediaList = () => {
                     className="flex items-center"
                   >
 
-                    <BsFileText size={20} className='text-gray-500 mr-2'/>
+                    <BsFileText size={20} className='text-gray-500 mr-1'/>
                     {/* User Info */}
-                      <div className="ml-3 flex-1 w-32 truncate">
+                      <div className="ml-3 flex-1 w-24 truncate">
                           <span className="font-medium text-sm text-gray-600">{fichier.nom}</span>
                           <p className="text-xs text-gray-500 truncate">{fichier.taille}</p>
                       </div>
@@ -184,7 +181,7 @@ const MediaList = () => {
 
                   <button
                     onClick={() => handleDeleteFile(fichier._id)}
-                    className="ml-4 hover:text-red-500 hover:border-red-500"
+                    className="ml-2 hover:text-red-500 hover:border-red-500"
                   >
                     <FiTrash size={15} />
                   </button>
@@ -201,37 +198,3 @@ const MediaList = () => {
 }
 
 export default MediaList
-
-/* 
-import {getFileByConversation} from "../../services/fileService"
-
-const { activeConversation } = state
-
-const [fichiers, setFichiers] = useState([])
-
-useEffect(() => {
-  if (activeConversation) {
-    fetchFilesByConversation(activeConversation)
-  }
-}, [activeConversation])
-
-  const fetchFilesByConversation = async (conversationId) => {
-    setLoading(true)
-    try {
-      const fichiers = await getFilesByConversations(conversationId)
-      setFichiers(fichiers)
-    } catch (error) {
-      console.error("Erreur lors du chargement des fichiers :", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (!activeConversation) {
-    return <div>Selectionner une conversation pour voir les fichiers media</div>
-  }
-
-  if (loading) {
-    return <div>chargement des fichiers ...</div>
-  }
-*/

@@ -57,39 +57,25 @@ const ConversationList = () => {
                     setCurrentConversation(null);
                 }
             });
-            // Écouter les nouveaux messages pour mettre à jour la liste des conversations
-            socket.on("messageReceived", async () => {
-                await fetchPrivateConversations()
-            })
 
-            // Écouter les modifications de messages
-            socket.on("messageModified", async () => {
-                await fetchPrivateConversations()
-            })
-
-            // Écouter les suppressions de messages
-            socket.on("messageDeleted", async () => {
-                await fetchPrivateConversations()
-            })
-
-            // Écouter les nouvelles conversations
-            socket.on("newConversation", async () => {
-                await fetchPrivateConversations()
+            socket.on("messageReceived", async (data) => {
+                if (currentConversation?._id === data.conversationId) {
+                    await fetchPrivateConversations()
+                }
             })
 
             return () => {
                 socket.off("conversationCreated");
                 socket.off("conversationRemoved");
-                socket.off("messageReceived")
-                socket.off("messageModified")
-                socket.off("messageDeleted")
-                socket.off("newConversation")
+                socket.off("messageReceived");
             }
         }
     }, [socket,fetchPrivateConversations, currentConversation, setCurrentConversation])
 
     // gestion du click
     const handleSelectConversation = async (conversation) => {
+        if (currentConversation?._id === conversation._id) return; // Évite les rechargements inutiles
+        
         setCurrentConversation(conversation)
         await fetchConversationMessages(conversation._id)
 
@@ -138,19 +124,10 @@ const ConversationList = () => {
             </div>
         )
     }
-
-    // if (!conversations.length) {
-    //     return (
-    //     <div className="h-full min-w-[248px] flex flex-col bg-gray-50 rounded-lg mr-2 shadow-md overflow-hidden text-center text-gray-500 mt-4">
-    //         Aucune conversation privée pour l&apos;instant.
-    //     </div>
-    //     )
-    // }
-
-
+    
 return (
-    <div className="h-full min-w-[240px] flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg mr-2 shadow-md overflow-hidden">
-        <div className="p-4 border-gray-200 "> 
+    <div className="h-full min-w-[230px] flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg mr-2 shadow-md overflow-hidden">
+        <div className="p-3 border-gray-200 "> 
             <div className="flex justify-between items-center p-2">
                 <h2 className="text-lg font-semibold">Messages</h2>
                 <FiPlusCircle 

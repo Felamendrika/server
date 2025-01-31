@@ -16,7 +16,7 @@ const ConversationDisplay = () => {
   const {
     // fetchPrivateConversations,
     fetchConversationMessages,
-    fetchFilesByConversations,
+    // fetchFilesByConversations,
     currentConversation,
     createMessage,
     updateMessage,
@@ -37,6 +37,7 @@ const ConversationDisplay = () => {
   const [filePreview, setFilePreview] = useState([])
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [openDropdownMessageId, setOpenDropdownMessageId] = useState(null);
+  // const [isSending, setIsSending] = useState(false); // Nouvel état pour éviter les envois multiples
 
   const scrollRef = useRef(null)
   const dropdownRef = useRef(null)
@@ -51,58 +52,57 @@ const ConversationDisplay = () => {
       scrollToBottom()
     }, [messages, currentConversation]);
 
-    
   // useEffect(() => {
   //   if (currentConversation) {
-  //     fetchConversationMessages(currentConversation._id)
+  //     fetchPrivateConversations(currentConversation._id)
   //   }
-  // }, [fetchConversationMessages, currentConversation])
+  // }, [fetchPrivateConversations, currentConversation])
 
   useEffect(() => {
     if (socket && currentConversation?._id) {
       socket.emit("joinConversation", currentConversation._id)
 
-      socket.on("messageReceived", (data) => {
+      
+      const handleMessageReceived = (data) => {
         if (currentConversation._id === data.conversation_id) {
-            fetchConversationMessages(currentConversation._id);
-            fetchFilesByConversations(currentConversation._id)
-            scrollToBottom()
+          // fetchConversationMessages(currentConversation._id);
+          scrollToBottom();
         }
-      });
+      };
 
-    socket.on("messageModified", (data) => {
+      const handleMessageModified = (data) => {
         if (currentConversation._id === data.conversation_id) {
-            fetchConversationMessages(currentConversation._id);
+          fetchConversationMessages(currentConversation._id);
         }
-    });
+      };
 
-    socket.on("messageDeleted", (data) => {
+      const handleMessageDeleted = (data) => {
         if (currentConversation._id === data.conversation_id) {
-            fetchConversationMessages(currentConversation._id);
+          fetchConversationMessages(currentConversation._id);
         }
-    });
+      };
 
-     // Gestion de la suppression de conversation
-     socket.on("conversationRemoved", ({ conversationId }) => {
-      if (currentConversation._id === conversationId) {
+      const handleConversationRemoved = ({ conversationId }) => {
+        if (currentConversation._id === conversationId) {
           setCurrentConversation(null);
-      }
-  });
+        }
+      };
 
-    return () => {
-      socket.emit("leaveConversation", currentConversation._id);
-      socket.off("messageReceived");
-      socket.off("messageModified");
-      socket.off("messageDeleted");
-      socket.off("conversationRemoved");
-    };
+      socket.on("messageReceived", handleMessageReceived);
+      socket.on("messageModified", handleMessageModified);
+      socket.on("messageDeleted", handleMessageDeleted);
+      socket.on("conversationRemoved", handleConversationRemoved);
+
+      return () => {
+        socket.emit("leaveConversation", currentConversation._id);
+        socket.off("messageReceived", handleMessageReceived);
+        socket.off("messageModified", handleMessageModified);
+        socket.off("messageDeleted", handleMessageDeleted);
+        socket.off("conversationRemoved", handleConversationRemoved);
+      };
   }
 
-  }, [socket, currentConversation, fetchConversationMessages,fetchFilesByConversations, setCurrentConversation]);
-
-  // useEffect(() => {
-  //   fetchPrivateConversations
-  // }, [fetchPrivateConversations])
+  }, [socket, currentConversation, fetchConversationMessages, setCurrentConversation]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -129,6 +129,7 @@ const ConversationDisplay = () => {
   }, [filePreview]);
 
   const handleSendMessage = async () => {
+    // if (isSending) return; // Évite les envois multiples
     if (!messageContent.length === 0 && !file) {
       toast.warning("Le message est vide. Veuillez saisir du texte")
       return
@@ -139,25 +140,20 @@ const ConversationDisplay = () => {
         // modif message existant
         const updatedMessage = await updateMessage(editingMessageId, messageContent)
         socket?.emit("messageUpdated", {
-            conversationId: currentConversation._id,
-            messageId: editingMessageId,
-            message: updatedMessage
+          conversationId: currentConversation._id,
+          message: updatedMessage
         })
         setEditingMessageId(null)
       } else {
-        const newMessage = await createMessage(currentConversation._id, messageContent, file)
-        // await fetchConversationMessages(currentConversation._id)
-        socket?.emit("messageReceived", {
-          conversationId: currentConversation._id,
-          message: newMessage
-        })
-        await fetchFilesByConversations(currentConversation._id)
+        // setIsSending(true);
+        await createMessage(currentConversation._id, messageContent, file)
       }
 
-      await fetchFilesByConversations(currentConversation._id)
+      // await fetchFilesByConversations(currentConversation._id)
       setMessageContent("")
       setFile(null)
       setFilePreview(null)
+      setShowEmojiPicker(false);
 
       // await fetchPrivateConversations(currentConversation._id)
 
@@ -186,7 +182,7 @@ const ConversationDisplay = () => {
         conversationId: currentConversation._id,
         messageId
       })
-      await fetchFilesByConversations(currentConversation._id)
+      // await fetchFilesByConversations(currentConversation._id)
 
     } catch (error) {
       console.error("Erreur lors de la suppression du message :", error)
@@ -346,6 +342,7 @@ const ConversationDisplay = () => {
                     )}
                       {openDropdownMessageId === msg._id && !isUserMessage && !msg.isDeleted && (
                         <div
+                          // ref={dropdownRef}
                           className={`absolute ${ isUserMessage ? "left-1" : "right-1"} top-0 mt-6 bg-gray-50 shadow-md rounded-lg border z-10`}
                         >
                           <button

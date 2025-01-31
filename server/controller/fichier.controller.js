@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs");
 
 const { isValidObjectId } = require("mongoose");
+const { getIO } = require("../socket/socket");
 
 // types de fichiers autorise
 const ALLOWED_FILE_TYPES = [
@@ -122,6 +123,21 @@ exports.uploadAndCreateFile = async (req, res) => {
 
     // mise a jour du champ fichier en BD
     await newFile.save();
+
+    /*const io = getIO();
+    if (io) {
+      io.to(`conversation_${message.conversation_id}`).emit("newFile", {
+        fichier: newFile,
+        messageId: message_id,
+        conversationId: message.conversation_id,
+      });
+    } else {
+      console.warn("Socket.IO non disponible pour la diffusion.");
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      });
+    } */
 
     //retourner l'URL du fichier telecharger
     res.status(200).json({
@@ -268,6 +284,20 @@ exports.getFilesByConversation = async (req, res) => {
     // Filtrage des fichiers: inclure ceux associé a la conversation
     const filteredFichiers = fichiers.filter((fichier) => fichier.message_id);
 
+    const io = getIO();
+    if (io) {
+      io.to(`conversation_${conversationId}`).emit("refreshConversationFiles", {
+        fichiers: filteredFichiers,
+        conversationId,
+      });
+    } else {
+      console.warn("Socket.IO non disponible pour la diffusion.");
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      });
+    }
+
     res.status(200).json({
       success: true,
       //data: fichiers,
@@ -349,18 +379,27 @@ exports.deleteFile = async (req, res) => {
       return res.status(404).json({
         message: "Fichier introuvable",
       });
-    } else {
-      console.log("ID du fichier :", fichierId);
     }
+
+    // Récupérer le message associé
+    const message = await Message.findById(fichier.message_id);
+    if (!message) {
+      return res.status(404).json({ message: "Message associé introuvable" });
+    }
+
+    const conversationId = message.conversation_id;
 
     // suppression du fichier du serveur
     const filePath = path.resolve(fichier.chemin_fichier);
     deletePhysicalFile(filePath);
     console.log("Chemin du fichier à supprimer :", filePath);
 
-    /*if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    } */
+    // Suppression de la reference dans le message
+    if (message) {
+      message.fichier = null;
+      message.isDeleted = true;
+      await message.save();
+    }
 
     // Supprimer de l'entree en BD
     const deletedFichier = await Fichier.findByIdAndDelete(fichierId);
@@ -371,15 +410,18 @@ exports.deleteFile = async (req, res) => {
       });
     }
 
-    // Suppression de la reference dans le message
-    const message = await Message.findById(fichier.message_id);
-    if (message) {
-      message.fichier = null;
-      message.isDeleted = true;
-      await message.save();
+    const io = getIO();
+    if (io) {
+      io.to(`conversation_${conversationId}`).emit("fileRemoved", {
+        fichierId,
+        messageId: message._id,
+        conversationId,
+      });
     } else {
-      res.status(404).json({
-        message: "Message non trouvé",
+      console.warn("Socket.IO non disponible pour la diffusion.");
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
       });
     }
 
@@ -472,54 +514,3 @@ exports.previewFile = async (req, res) => {
     });
   }
 };
-
-/*
-
-// Récupérer tous les fichiers associés à une conversation
-exports.getFilesByConversation = async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-
-    if (!isValidObjectId(conversationId)) {
-      return res.status(400).json({ message: "ID de conversation invalide." });
-    }
-
-    const files = await Fichier.aggregate([
-      {
-        $lookup: {
-          from: "messages", // Nom de la collection "messages"
-          localField: "message_id",
-          foreignField: "_id",
-          as: "message",
-        },
-      },
-      { $unwind: "$message" },
-      {
-        $match: { "message.conversation_id": conversationId },
-      },
-      {
-        $project: {
-          nom: 1,
-          type: 1,
-          taille: 1,
-          chemin_fichier: 1,
-          message_id: 1,
-        },
-      },
-    ]);
-
-    res.status(200).json({
-      success: true,
-      message: "Fichiers récupérés avec succès.",
-      data: files,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de la récupération des fichiers.",
-      error: error.message,
-    });
-  }
-};
-*/

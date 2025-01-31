@@ -140,21 +140,35 @@ exports.createMessage = async (req, res) => {
       });
 
       newMessage.fichier = fichier;
-
       // sauvegrader le fichier en BD
       await fichier.save();
     }
 
     await newMessage.save();
 
+    // modif pour fichiers
+    // Population des données nécessaires
+    const populatedMessage = await Message.findById(newMessage._id)
+      .populate("user_id", "nom pseudo avatar")
+      .populate("fichier");
+
     const io = getIO();
     // Notifier tous les utilisateurs de la conversation
     if (io) {
       const roomName = `conversation_${conversation_id}`;
       io.to(roomName).emit("messageReceived", {
-        message: newMessage,
+        message: populatedMessage,
+        // message: {
+        //   ...newMessage._doc,
+        //   user_id: {
+        //     _id: user_id,
+        //     nom: req.user.nom,
+        //     pseudo: req.user.pseudo,
+        //     avatar: req.user.avatar,
+        //   },
+        // },
         conversation_id: conversation_id,
-        // sender_id: user_id,
+        fichier: fichier || null,
       });
       console.log("Message socket:", newMessage);
     } else {
@@ -412,10 +426,6 @@ exports.deleteMessage = async (req, res) => {
           "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
       });
     }
-
-    /*io.to(message.conversation_id).emit("messageDeleted", {
-      message: "Un message a ete supprimé",
-    }); */
 
     res.status(200).json({
       success: true,

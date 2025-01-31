@@ -4,7 +4,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import messageService from '../services/messageService'
 import { getMessages, getUserPrivateConversation, getUserGroupConversation, createConversation as createConversationService, deleteConversation as deleteConversationService } from '../services/conversationService'
-import { getFilesByConversation, uploadFile as uploadFileService , deleteFile as deleteFileService , previewFile as previewFileService, downloadFile as downloadFileService } from '../services/fileService'
+import { getFilesByConversation, deleteFile as deleteFileService } from '../services/fileService'
+// import { getFilesByConversation, uploadFile as uploadFileService , deleteFile as deleteFileService , previewFile as previewFileService, downloadFile as downloadFileService } from '../services/fileService'
 import { toast } from 'react-toastify'
 
 import { useSocket } from './SocketContext'
@@ -34,8 +35,10 @@ export const MessageProvider = ({ children }) => {
         const fetchPrivateConversations = useCallback( async () => {
             setLoading(true)
             try {
-                const { conversation } = await getUserPrivateConversation()
-                setConversations(conversation || [])
+                const { conversation = [] } = await getUserPrivateConversation()
+                // const { conversation } = await getUserPrivateConversation()
+                setConversations(Array.isArray(conversation) ? conversation : [])
+                // setConversations(conversation || [])
                 // console.log("Conversation filtrer ", conversation)
             } catch (error) {
                 console.error("Erreur lors du chargement des conversations privee de l'utilisateur connecter: ", error)
@@ -44,9 +47,21 @@ export const MessageProvider = ({ children }) => {
             }
         }, [])
 
+        
+    // Fonction pour éviter les doublons dans les messages
+    const addMessageWithoutDuplication = useCallback((newMessage) => {
+        setMessages(prev => {
+            const messageExists = prev.some(msg => msg._id === newMessage._id);
+            if (!messageExists) {
+                return [...prev, newMessage];
+            }
+            return prev;
+        });
+    }, []);
+
     // ECOUTEUR D"EVEMENTS SOCKET
     useEffect(() => {
-        if (socket) {
+        if (socket && currentConversation?._id) {
             socket.on("conversationCreated", (data) => {
                 setConversations(prev => [...prev, data.conversation])
             })
@@ -72,8 +87,37 @@ export const MessageProvider = ({ children }) => {
 
             // nouveau message recu
             socket.on("messageReceived", async (data) => {
-                    if (currentConversation?._id === data.conversation_id) {
-                        setMessages(prev => [...prev, data.message]);
+                if (currentConversation?._id === data.conversation_id) {
+                        // const newMessage = {
+                        //     ...data.message,
+                        //     user_id: data.message.user_id?._id ? data.message.user_id : { _id: data.message.user_id }
+                        // }
+                        
+                        // if(data.fichier) {
+                        //     setFichiers(prev => [...prev, data.fichier]);
+                        // }
+                        // setMessages(prev => [...prev, newMessage]);
+                        addMessageWithoutDuplication(data.message)
+
+                        if (data.message.fichier) {
+                            setFichiers(prev => {
+                                const fichierExists = prev.some( f => f._id === data.fichier._id)
+
+                                if (!fichierExists) {
+                                    return [...prev, data.fichier]
+                                }
+                                return prev
+                            })
+                        }
+                        
+                        // setMessages(prev => {
+                        //     // verifie si le message existe deja
+                        //     const messageExists = prev.some(msg => msg._id === data.message._id);
+                        //     if (!messageExists) {
+                        //         return [...prev, data.message];
+                        //     }
+                        //     return prev; 
+                        // })
                         // Mise à jour de la liste des conversations sans refresh
                         setConversations(prev => {
                         const updatedConversations = [...prev];
@@ -86,35 +130,90 @@ export const MessageProvider = ({ children }) => {
                         return updatedConversations;
                         });
                     }
-              });
+                });
 
             // Message modifié
             socket.on("messageModified", (data) => {
                 if (currentConversation?._id === data.conversation_id) {
-                setMessages(prev => 
-                    prev.map(msg => msg._id === data.message._id ? data.message : msg)
-                );
+                    setMessages(prev => 
+                        prev.map(msg => msg._id === data.messageId ? data.message : msg)
+                    );
+                    setConversations(prev => {
+                        const updatedConversations = [...prev];
+                        const conversationIndex = updatedConversations.findIndex(
+                            conv => conv._id === data.conversation_id
+                        );
+                        if (conversationIndex !== -1) {
+                            updatedConversations[conversationIndex].lastMessage = data.message;
+                        }
+                        return updatedConversations;
+                    });
                 }
             });
 
             socket.on("messageDeleted", (data) => {
                 if (currentConversation?._id === data.conversation_id) {
                 setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+
+                setConversations(prev => {
+                    const updatedConversations = [...prev];
+                    const conversationIndex = updatedConversations.findIndex(
+                        conv => conv._id === data.conversation_id
+                    );
+                    if (conversationIndex !== -1) {
+                        updatedConversations[conversationIndex].lastMessage = data.message;
+                    }
+                    return updatedConversations;
+                    });
                 }
             });
 
-            // Nouvelle conversation
-            socket.on("newConversation", async () => {
-                await fetchPrivateConversations();
-            });
+            // // Nouvelle conversation
+            // socket.on("newConversation", async () => {
+            //     await fetchPrivateConversations();
+            // });
 
             // Conversation supprimer
-            socket.on("conversationDeleted", ({ conversationId }) => {
-                setConversations(prev => 
-                    prev.filter(conv => conv._id !== conversationId)
-                )
-                if(currentConversation?._id === conversationId) {
-                    clearConversationState()
+            // socket.on("conversationDeleted", ({ conversationId }) => {
+            //     setConversations(prev => 
+            //         prev.filter(conv => conv._id !== conversationId)
+            //     )
+            //     if(currentConversation?._id === conversationId) {
+            //         clearConversationState()
+            //     }
+            // })
+
+            socket.on("newFile", (data) => {
+                if (currentConversation?._id === data.conversationId) {
+                    setFichiers(prev => {
+                        const fichierExists = prev.some(f => f._id === data.fichier._id);
+                        return fichierExists ? prev : [...prev, data.fichier];
+                    });
+                    // setFichiers(prev => [...prev, data.fichier])
+                }
+            })
+
+            socket.on("fileRemoved", (data) => {
+                if (currentConversation?._id === data.conversationId) {
+                    // setFichiers(prev => [...prev, data.fichier]);
+                    // setMessages(prev =>
+                    //     prev.map(msg => msg._id === data.messageId ? { ...msg, fichier: data.fichier } : msg)
+                    // );
+
+                    setFichiers(prev => prev.filter(fichier => fichier._id !== data.fichierId))
+                    setMessages(prev => 
+                        prev.map(msg => 
+                            msg._id === data.messageId
+                                ? { ...msg, fichier: null }
+                                : msg
+                        )
+                    )
+                }
+            })
+
+            socket.on("refreshConversationFiles", (data) => {
+                if (currentConversation?._id === data.conversationId) {
+                    setFichiers(data.fichiers)
                 }
             })
         }
@@ -128,9 +227,12 @@ export const MessageProvider = ({ children }) => {
                 socket.off("conversationRemoved");
                 socket.off("groupConversationCreated");
                 socket.off("groupConversationRemoved");
+                socket.off("newFile")
+                socket.off("fileRemoved")
+                socket.off("refreshConversationFiles")
             }
         }
-    }, [socket, currentConversation, clearConversationState, fetchPrivateConversations])
+    }, [socket, currentConversation, clearConversationState, fetchPrivateConversations, addMessageWithoutDuplication])
 
     /** ------ GESTION DES GROUPES ET CONVERSATIONS ASSOCIÉES ------ **/
 
@@ -281,8 +383,16 @@ export const MessageProvider = ({ children }) => {
                 contenu,
                 fichier
             )
+
+            // if(fichier) {
+            //     socket?.emit("fileUploaded", {
+            //         fichier: newMessage.fichier,
+            //         messageId: newMessage._id,
+            //         conversationId
+            //     })
+            // }
             // Mise à jour immédiate des messages
-            setMessages(prev => [...prev, newMessage]);
+            // setMessages(prev => [...prev, newMessage]);
 
             // setConversations(prev => {
             //     const updatedConversations = [...prev]
@@ -383,28 +493,19 @@ export const MessageProvider = ({ children }) => {
 
     /** ------ GESTION DES FICHIERS ------ **/
 
-    const uploadFile = async (formData, messageId) => {
-        try {
-            const uploadedFile = await uploadFileService(formData)
-            if (messageId) {
-                setFichiers((prev) => [...prev, uploadedFile]);
-            }
-            console.log(uploadFile.fichier)
-            return uploadFile
-        } catch (err) {
-            console.error("Erreur dans uploadFile:", err);
-        }
-    };
-
     const fetchFilesByConversations = useCallback(async (conversationId) => {
         setLoading(true)
         try {
             const response = await getFilesByConversation(conversationId)
 
-            // console.log(response)
-            // console.log(response.fichiers)
-            if (response && response.fichiers) {
+            console.log(response)
+            console.log(response?.fichiers)
+            if (response && response?.fichiers){
                 setFichiers(response.fichiers)
+                // socket?.emit("conversationFilesUpdated", {
+                //     fichiers: response.fichiers,
+                //     conversationId
+                // })
             } else {
                 console.error("Aucune liste de fichiers récupérée")
                 setFichiers([])
@@ -424,6 +525,16 @@ export const MessageProvider = ({ children }) => {
     const deleteFile = async (fichierId) => {
         try {
             await deleteFileService(fichierId)
+
+            const fichier = fichiers.find((f) => f._id === fichierId)
+
+            if( fichier) {
+                socket?.emit("fileDeleted", {
+                    fichierId: fichierId,
+                    messageId: fichier.message_id,
+                    conversationId: currentConversation._id
+                })
+            }
             // Supprimer le fichier de la liste des fichiers
             setFichiers((prev) => prev.filter((fichier) => fichier._id !== fichierId))
 
@@ -435,31 +546,12 @@ export const MessageProvider = ({ children }) => {
             )
 
             toast.success("Fichier supprimé avec succès !")
-            await fetchFilesByConversations(currentConversation._id);
+            // await fetchFilesByConversations(currentConversation._id);
         } catch (err) {
             console.error("Erreur dans deleteFile:", err);
             toast.error("Erreur lors de la suppression du fichier !");
         }
     };
-
-    const previewFile = async (fichierId) => {
-        try {
-            const file = await previewFileService(fichierId)
-            return file
-        } catch (error) {
-            console.error("Erreur lors de la prévisualisation d'un fichier:", error);
-        }
-    }
-
-    const downloadFile = async (fichierId) => {
-        try {
-            const file = await downloadFileService(fichierId)
-            return file
-        } catch (error) {
-            console.error("Erreur lors du téléchargement d'un fichier:", error);
-        }
-    }
-
 
     const contextValue = { 
         conversations, 
@@ -478,11 +570,11 @@ export const MessageProvider = ({ children }) => {
         createMessage, 
         updateMessage, 
         deleteMessage, 
-        uploadFile, 
+        // uploadFile, 
         fetchFilesByConversations, 
         deleteFile, 
-        previewFile,
-        downloadFile,
+        // previewFile,
+        // downloadFile,
         loading 
     }
 
@@ -500,3 +592,37 @@ export const useMessage = () => {
     }
     return context
 }
+
+/*
+    const uploadFile = async (formData, messageId) => {
+        try {
+            const uploadedFile = await uploadFileService(formData)
+            if (messageId) {
+                setFichiers((prev) => [...prev, uploadedFile]);
+            }
+            console.log(uploadFile.fichier)
+            return uploadFile
+        } catch (err) {
+            console.error("Erreur dans uploadFile:", err);
+        }
+    };
+
+const previewFile = async (fichierId) => {
+        try {
+            const file = await previewFileService(fichierId)
+            return file
+        } catch (error) {
+            console.error("Erreur lors de la prévisualisation d'un fichier:", error);
+        }
+    }
+
+    const downloadFile = async (fichierId) => {
+        try {
+            const file = await downloadFileService(fichierId)
+            return file
+        } catch (error) {
+            console.error("Erreur lors du téléchargement d'un fichier:", error);
+        }
+    }
+
+*/

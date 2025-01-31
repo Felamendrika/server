@@ -272,14 +272,14 @@ const GroupDetail = () => {
                                     >
                                         {getFileIcon(fichier.type)}
                                         {/* User Info */}
-                                        <div className="ml-3 flex-1 w-32 truncate">
+                                        <div className="ml-3 flex-1 w-24 truncate">
                                             <span className="font-medium text-sm text-gray-600">{fichier.nom}</span>
                                             <p className="text-xs text-gray-500 truncate">{fichier.taille}</p>
                                         </div>
                                     </a>
                                     <button 
                                         onClick={() => handleDeleteFile(fichier._id)} 
-                                        className="ml-4 hover:text-red-500 hover:border-red-500"
+                                        className="ml-2 hover:text-red-500 hover:border-red-500"
                                     >
                                         <FiTrash size={15}/>
                                     </button>
