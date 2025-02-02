@@ -10,7 +10,6 @@ import { MessageProvider } from './context/MessageContext.jsx';
 import { GroupProvider } from './context/GroupContext.jsx';
 import { EventProvider } from './context/EventContext.jsx';
 import { SocketProvider } from './context/SocketContext.jsx'
-// import { NotificationProvider } from './context/NotifContext.jsx';
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
 
 createRoot(document.getElementById('root')).render(
@@ -19,14 +18,14 @@ createRoot(document.getElementById('root')).render(
       <ErrorBoundary>
         <AuthProvider>
           <SocketProvider>
-            <MessageProvider>
-              <GroupProvider>
-                <EventProvider>
-                      <ToastContainer autoClose={3000} closeOnClick/>
-                      <App />
-                </EventProvider>
-              </GroupProvider>
-            </MessageProvider>
+              <MessageProvider>
+                <GroupProvider>
+                  <EventProvider>
+                        <ToastContainer autoClose={3000} closeOnClick/>
+                        <App />
+                  </EventProvider>
+                </GroupProvider>
+              </MessageProvider>
           </SocketProvider>
         </AuthProvider>
       </ErrorBoundary>

@@ -11,13 +11,6 @@ router.get("/", authMiddleware, messageController.getMessages);
 // route pour recuperer un message par son ID
 router.get("/:messageId", authMiddleware, messageController.getMessageById);
 
-// route pour avoir les messages par conversation
-// router.get(
-//   "/conversation/:conversationId",
-//   authMiddleware,
-//   messageController.getMessagesByConversation
-// );
-
 // MAJ d'un message
 router.put(
   "/update/:messageId",

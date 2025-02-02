@@ -96,6 +96,13 @@ exports.createMessage = async (req, res) => {
       });
     }
 
+    // const receiverId =
+    //   conversation.type === "private"
+    //     ? conversation.sender_id.toString() === user_id.toString()
+    //       ? conversation.receiver_id
+    //       : conversation.sender_id
+    //     : null;
+
     // Creation message
     const newMessage = new Message({
       contenu: contenu || null, // Permet un message sans contenu
@@ -168,9 +175,10 @@ exports.createMessage = async (req, res) => {
         //   },
         // },
         conversation_id: conversation_id,
+        // receiverId: receiverId,
         fichier: fichier || null,
       });
-      console.log("Message socket:", newMessage);
+      console.log("Message socket:", populatedMessage);
     } else {
       console.warn("Socket.IO non disponible pour la diffusion.");
       return res.status(500).json({

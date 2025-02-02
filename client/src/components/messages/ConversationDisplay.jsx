@@ -60,7 +60,7 @@ const ConversationDisplay = () => {
 
   useEffect(() => {
     if (socket && currentConversation?._id) {
-      socket.emit("joinConversation", currentConversation._id)
+      // socket.emit("joinConversation", currentConversation._id)
 
       
       const handleMessageReceived = (data) => {
@@ -94,7 +94,7 @@ const ConversationDisplay = () => {
       socket.on("conversationRemoved", handleConversationRemoved);
 
       return () => {
-        socket.emit("leaveConversation", currentConversation._id);
+        // socket.emit("leaveConversation", currentConversation._id);
         socket.off("messageReceived", handleMessageReceived);
         socket.off("messageModified", handleMessageModified);
         socket.off("messageDeleted", handleMessageDeleted);
@@ -147,6 +147,7 @@ const ConversationDisplay = () => {
       } else {
         // setIsSending(true);
         await createMessage(currentConversation._id, messageContent, file)
+
       }
 
       // await fetchFilesByConversations(currentConversation._id)

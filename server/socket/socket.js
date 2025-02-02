@@ -13,8 +13,11 @@ const initializeSocket = (server) => {
       methods: ["GET", "POST"],
       credentials: true,
     },
-    pingTimeout: 60000,
-    pingInterval: 25000,
+    pingTimeout: 30000,
+    pingInterval: 10000,
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
     // transports: ["websocket", "polling"],
   });
 
@@ -50,24 +53,11 @@ const initializeSocket = (server) => {
     socket.on("userConnected", () => {
       if (!connectedUsers.includes(socket.user?.id)) {
         connectedUsers.push(socket.user?.id);
-        io.emit("userOnline", { userId: socket.user?.id });
+        // io.emit("userOnline", { userId: socket.user?.id });
         io.emit("updateOnlineUsers", connectedUsers);
+        socket.broadcast.emit("userOnline", { userId: socket.user?.id });
       }
     });
-
-    // // Ajouter l'utilisateur au tableau
-    // if (!connectedUsers.includes(socket.user?.id)) {
-    //   connectedUsers.push(socket.user?.id);
-    //   console.log(
-    //     "Liste mise à jour des utilisateurs connectés:",
-    //     connectedUsers
-    //   );
-
-    //   // Émettre l'événement userOnline
-    //   io.emit("userOnline", { userId: socket.user?.id });
-    // }
-    // Émission explicite au nouveau client connecté
-    // socket.emit("updateOnlineUsers", connectedUsers);
 
     // Répondre à la demande de liste
     socket.on("getOnlineUsers", () => {
@@ -75,6 +65,7 @@ const initializeSocket = (server) => {
     });
 
     socket.on("joinConversation", (conversation_id) => {
+      socket.conversation_id = conversation_id;
       const room = `conversation_${conversation_id}`;
       socket.join(room);
       console.log(
@@ -82,31 +73,38 @@ const initializeSocket = (server) => {
       );
     });
 
-    socket.on("sendNotification", (data) => {
-      const { receiverId, type, contenu } = data;
-      io.to(`user_${receiverId}`).emit("newNotification", {
-        type,
-        contenu,
-        senderId: socket.user.id,
-        timestamp: new Date(),
-      });
-      console.log(`Notification a ${receiverId}`);
+    socket.on("leaveConversation", (conversation_id) => {
+      if (socket.conversation_id === conversation_id) {
+        const room = `conversation_${conversation_id}`;
+        socket.leave(room);
+        console.log(
+          `User ${socket.user.id} a quitter la conversation ${conversation_id}`
+        );
+      }
     });
 
     socket.on("newMessage", (data) => {
       const { conversationId, message } = data;
       io.to(`conversation_${conversationId}`).emit("messageReceived", {
-        message: data.message,
-        conversationId: data.conversation_id,
+        message,
+        conversationId,
       });
 
-      io.to(`user${receiverId}`).emit("messageNotification", {
-        conversationId,
-        message,
-        sender: socket.user,
-      });
+      // Notification pour les utilisateurs dans la conversation
+      // if (
+      //   connectedUsers.includes(receiverId) &&
+      //   socket.conversation_id === conversationId
+      // ) {
+      //   io.to(`user_${receiverId}`).emit("newMessageNotification", {
+      //     senderId: socket.user.id,
+      //     // senderName: socket.user.pseudo,
+      //     conversationId: conversationId,
+      //     message: `Nouveau message de ${socket.user?.pseudo}`,
+      //   });
+      // }
+
       console.log(
-        `Message envoyé dans conversation ${conversationId} par ${socket.user.id}:`,
+        `Message envoyé dans conversation ${conversationId} par ${socket.user?.id}:`,
         message
       );
     });
@@ -136,9 +134,9 @@ const initializeSocket = (server) => {
       io.to(`user_${receiverId}`).emit("ConversationCreated", { conversation });
     });
 
-    socket.on("conversationDeleted", ({ conversationId }) => {
-      io.to(`conversation_${conversationId}`).emit("conversationRemoved", {
-        conversationId,
+    socket.on("conversationDeleted", (data) => {
+      io.to(`conversation_${data.conversationId}`).emit("conversationRemoved", {
+        conversationId: data.conversationId,
       });
     });
 
@@ -208,6 +206,7 @@ const initializeSocket = (server) => {
       console.log(`Utilisateur déconnecté : ${socket.user.id}`);
       connectedUsers = connectedUsers.filter((id) => id !== socket.user?.id);
       io.emit("updateOnlineUsers", connectedUsers);
+      socket.broadcast.emit("userOffline", { userId: socket.user?.id });
     });
   });
 

@@ -15,7 +15,7 @@ const MessageContext = createContext()
 
 // fournir le contexte
 export const MessageProvider = ({ children }) => {
-    const {socket} = useSocket()
+    const {socket } = useSocket()
 
     const [conversations, setConversations] = useState([])
     const [messages, setMessages] = useState([])
@@ -62,6 +62,8 @@ export const MessageProvider = ({ children }) => {
     // ECOUTEUR D"EVEMENTS SOCKET
     useEffect(() => {
         if (socket && currentConversation?._id) {
+            // socket.emit("joinConversation", currentConversation._id);
+
             socket.on("conversationCreated", (data) => {
                 setConversations(prev => [...prev, data.conversation])
             })
@@ -110,14 +112,6 @@ export const MessageProvider = ({ children }) => {
                             })
                         }
                         
-                        // setMessages(prev => {
-                        //     // verifie si le message existe deja
-                        //     const messageExists = prev.some(msg => msg._id === data.message._id);
-                        //     if (!messageExists) {
-                        //         return [...prev, data.message];
-                        //     }
-                        //     return prev; 
-                        // })
                         // Mise à jour de la liste des conversations sans refresh
                         setConversations(prev => {
                         const updatedConversations = [...prev];
@@ -129,6 +123,8 @@ export const MessageProvider = ({ children }) => {
                         }
                         return updatedConversations;
                         });
+
+                        // markConversationAsRead(data.conversation_id)
                     }
                 });
 
@@ -220,6 +216,7 @@ export const MessageProvider = ({ children }) => {
 
         return () => {
             if(socket) {
+                socket.emit("leaveConversation", currentConversation?._id);
                 socket.off("messageReceived")
                 socket.off("messageModified")
                 socket.off("messageDeleted");
@@ -407,12 +404,13 @@ export const MessageProvider = ({ children }) => {
             
             // socket?.emit("newMessage", {
             //     message: newMessage,
-            //     conversationId
+            //     conversationId,
+            //     receiverId: currentConversation.otherParticipant._id
             // })
             // console.log("Nouveau message :", newMessage)
             // setMessages((prev) => [...prev, newMessage])
             return newMessage
-        }catch (err) {
+        } catch (err) {
             console.error("Erreur envoi du message:", err);
             toast.error(err.message || "Erreur lors de l'envoi du message")
         }
@@ -570,11 +568,8 @@ export const MessageProvider = ({ children }) => {
         createMessage, 
         updateMessage, 
         deleteMessage, 
-        // uploadFile, 
         fetchFilesByConversations, 
         deleteFile, 
-        // previewFile,
-        // downloadFile,
         loading 
     }
 

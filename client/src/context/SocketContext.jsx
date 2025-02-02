@@ -11,6 +11,9 @@ export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [isConnected, setIsConnected] = useState(false); // nouveau state pour suivre la connexion
+  // const [unreadMessages, setUnreadMessages] = useState(new Set());
+  // const [hasNewMessages, setHasNewMessages] = useState(false);
+  // const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
     const newSocket = io("http://localhost:5000", {
@@ -103,8 +106,21 @@ export const SocketProvider = ({ children }) => {
       console.log("Événement supprimé:", data);
     });
 
+    // newSocket.on("newMessageNotification", (data) => {
+    //   setNotifications(prev => [data, ...prev]);
+    //   setUnreadMessages(prev => new Set(prev).add(data.conversationId))
+    //   setHasNewMessages(true);
+    // })
+
   setSocket(newSocket)
     return () => {
+      newSocket.off("connect");
+      newSocket.off("disconnect");
+      newSocket.off("updateOnlineUsers");
+      newSocket.off("userOnline");
+      newSocket.off("userOffline");
+      // newSocket.off("newMessageNotification");
+
       newSocket.off("conversationCreated");
       newSocket.off("conversationRemoved");
       newSocket.off("groupConversationCreated");
@@ -135,11 +151,32 @@ export const SocketProvider = ({ children }) => {
     }
   }, [socket, isConnected]);
 
+  // const clearNotifications = () => {
+  //   setNotifications([]);
+  //   setHasNewMessages(false);
+  // };
+
+  // const markConversationAsRead = (conversationId) => {
+  //   setUnreadMessages(prev => {
+  //     const newSet = new Set(prev);
+  //     newSet.delete(conversationId);
+  //     if (newSet.size === 0) {
+  //       setHasNewMessages(false);
+  //     }
+  //     return newSet;
+  //   });
+  // };
+
   const contextValue = {
     socket,
     onlineUsers,
     isConnected,
+    // hasNewMessages,
+    // unreadMessages,
+    // notifications,
     isUserOnline: useCallback((userId) => onlineUsers.includes(userId), [onlineUsers]),
+    // clearNotifications,
+    // markConversationAsRead,
     // isOnlineUser: (userId) => onlineUsers.includes(userId),
     joinConversation: (conversationId) => {
       emitEvent("joinConversation", conversationId)

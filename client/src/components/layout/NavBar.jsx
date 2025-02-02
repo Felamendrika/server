@@ -5,22 +5,25 @@ import { FaUserCircle} from 'react-icons/fa'
 import NotificationModal from '../modal/NotificationModal'
 import UserModal from '../modal/UserModal'
 
-// import { useNotification } from '../../context/NotifContext'
+// import { useSocket } from '../../context/SocketContext'
 
 const NavBar = () => {
     const [isNotificationOpen, setNotificationOpen] = useState(false)
     const [isUserModal, setUserModal] = useState(false)
-    // const { unreadCount } = useNotification();
+    // const { notifications, clearNotifications } = useSocket();
 
     const toggleNotification= () => {
         setNotificationOpen(!isNotificationOpen)
+        // if (!isNotificationOpen) {
+        //     clearNotifications()
+        // }
     }
 
     const toggleUserModal = () => {
         setUserModal(!isUserModal)
     }
 
-  return (
+return (
     <div className='bg-[#FBF4D6] h-10 flex sticky items-center justify-end pr-14 border border-black shadow-md rounded-lg' >
         <div className='flex items-center space-x-8 '>
             {/* Notification */}
@@ -29,9 +32,9 @@ const NavBar = () => {
                     onClick={toggleNotification}
                     className='text-2xl cursor-pointer hover:text-gray-700'
                 />
-                {/* {unreadCount > 0 && (
+                {/* {notifications.length > 0 && (
                     <span className='absolute top-0 right-0 bg-red-500 rounded-full px-1 text-xs'>
-                        {unreadCount}
+                        {notifications.length}
                     </span>
                 )} */}
             </div>

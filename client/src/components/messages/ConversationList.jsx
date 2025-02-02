@@ -28,7 +28,7 @@ const ConversationList = () => {
         loading
     } = useMessage()
 
-    const { socket, isUserOnline } = useSocket()
+    const { socket, isUserOnline} = useSocket()
 
     
     useEffect(() => {   
@@ -63,6 +63,16 @@ const ConversationList = () => {
                     await fetchPrivateConversations()
                 }
             })
+            socket.on("messageModified", async (data) => {
+                if (currentConversation?._id === data.conversationId) {
+                    await fetchPrivateConversations()
+                }
+            })
+            socket.on("messageDeleted", async (data) => {
+                if (currentConversation?._id === data.conversationId) {
+                    await fetchPrivateConversations()
+                }
+            })
 
             return () => {
                 socket.off("conversationCreated");
@@ -78,6 +88,7 @@ const ConversationList = () => {
         
         setCurrentConversation(conversation)
         await fetchConversationMessages(conversation._id)
+        // markConversationAsRead(conversation._id)
 
         socket?.emit("joinConversation", conversation._id)
     }
