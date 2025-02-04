@@ -16,8 +16,8 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <ErrorBoundary>
-        <AuthProvider>
           <SocketProvider>
+            <AuthProvider>
               <MessageProvider>
                 <GroupProvider>
                   <EventProvider>
@@ -26,8 +26,8 @@ createRoot(document.getElementById('root')).render(
                   </EventProvider>
                 </GroupProvider>
               </MessageProvider>
+            </AuthProvider>
           </SocketProvider>
-        </AuthProvider>
       </ErrorBoundary>
     </BrowserRouter>
   </StrictMode>,

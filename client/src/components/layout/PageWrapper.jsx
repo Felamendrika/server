@@ -10,6 +10,7 @@ const PageWrapper = () => {
 
     <Routes>
       {/* Sous-routes pour le pageWrapper */}
+        <Route index element={<Messages />} />
         <Route path="messages" element={<Messages/>} />
         <Route path="groups" element={<Groups/>} />
         <Route path="calendrier" element={<Calendrier/>} />

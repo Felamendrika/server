@@ -12,7 +12,6 @@ import { useSocket } from './SocketContext'
 
 const MessageContext = createContext()
 
-
 // fournir le contexte
 export const MessageProvider = ({ children }) => {
     const {socket } = useSocket()
@@ -49,11 +48,12 @@ export const MessageProvider = ({ children }) => {
 
         
     // Fonction pour éviter les doublons dans les messages
-    const addMessageWithoutDuplication = useCallback((newMessage) => {
+    const addMessageWithoutDuplication = useCallback((data) => {
+        if (!data?.message?._id) return;
         setMessages(prev => {
-            const messageExists = prev.some(msg => msg._id === newMessage._id);
+            const messageExists = prev.some(msg => msg._id === data.message._id);
             if (!messageExists) {
-                return [...prev, newMessage];
+                return [...prev, data.message];
             }
             return prev;
         });
@@ -65,7 +65,15 @@ export const MessageProvider = ({ children }) => {
             // socket.emit("joinConversation", currentConversation._id);
 
             socket.on("conversationCreated", (data) => {
-                setConversations(prev => [...prev, data.conversation])
+                console.log("Nouvelle conversation reçue:", data);
+                setConversations(prev => {
+                    // Éviter les doublons
+                    const exists = prev.some(conv => conv._id === data.conversation._id);
+                    if (!exists) {
+                        return [...prev, data.conversation];
+                    }
+                    return prev;
+                });
             })
 
             socket.on("conversationRemoved", ({ conversationId }) => {
@@ -88,18 +96,10 @@ export const MessageProvider = ({ children }) => {
             });
 
             // nouveau message recu
-            socket.on("messageReceived", async (data) => {
+            socket.on("messageReceived", (data) => {
                 if (currentConversation?._id === data.conversation_id) {
-                        // const newMessage = {
-                        //     ...data.message,
-                        //     user_id: data.message.user_id?._id ? data.message.user_id : { _id: data.message.user_id }
-                        // }
-                        
-                        // if(data.fichier) {
-                        //     setFichiers(prev => [...prev, data.fichier]);
-                        // }
-                        // setMessages(prev => [...prev, newMessage]);
-                        addMessageWithoutDuplication(data.message)
+
+                        addMessageWithoutDuplication(data)
 
                         if (data.message.fichier) {
                             setFichiers(prev => {
@@ -111,28 +111,28 @@ export const MessageProvider = ({ children }) => {
                                 return prev
                             })
                         }
-                        
-                        // Mise à jour de la liste des conversations sans refresh
-                        setConversations(prev => {
-                        const updatedConversations = [...prev];
-                        const conversationIndex = updatedConversations.findIndex(
-                            conv => conv._id === data.conversation_id
-                        );
-                        if (conversationIndex !== -1) {
-                            updatedConversations[conversationIndex].lastMessage = data.message;
-                        }
-                        return updatedConversations;
-                        });
-
-                        // markConversationAsRead(data.conversation_id)
+                }
+                 // Mise à jour globale des conversations
+                                        // Mise à jour de la liste des conversations sans refresh
+                setConversations(prev => {
+                    const updatedConversations = [...prev];
+                    const conversationIndex = updatedConversations.findIndex(
+                        conv => conv._id === data.conversation_id
+                    );
+                    if (conversationIndex !== -1) {
+                        updatedConversations[conversationIndex].lastMessage = data.message;
                     }
+                    return updatedConversations;
+                });
+                        // markConversationAsRead(data.conversation_id)
+                    
                 });
 
             // Message modifié
             socket.on("messageModified", (data) => {
                 if (currentConversation?._id === data.conversation_id) {
                     setMessages(prev => 
-                        prev.map(msg => msg._id === data.messageId ? data.message : msg)
+                        prev.map(msg => msg._id === data.message._id ? data.message : msg)
                     );
                     setConversations(prev => {
                         const updatedConversations = [...prev];
@@ -143,13 +143,24 @@ export const MessageProvider = ({ children }) => {
                             updatedConversations[conversationIndex].lastMessage = data.message;
                         }
                         return updatedConversations;
-                    });
+                    })
                 }
             });
 
             socket.on("messageDeleted", (data) => {
                 if (currentConversation?._id === data.conversation_id) {
-                setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+                setMessages(prev => 
+                    prev.map(msg => 
+                        msg._id === data.messageId
+                            ? { ...msg, isDeleted: true, contenu: null, fichier: null }
+                            : msg
+                    ));
+
+                        setFichiers(prev => {
+                            prev.filter(fichier => 
+                                fichier.message_id !== data.messageId
+                            )
+                        })
 
                 setConversations(prev => {
                     const updatedConversations = [...prev];
@@ -157,27 +168,25 @@ export const MessageProvider = ({ children }) => {
                         conv => conv._id === data.conversation_id
                     );
                     if (conversationIndex !== -1) {
-                        updatedConversations[conversationIndex].lastMessage = data.message;
+                        updatedConversations[conversationIndex].lastMessage = null;
                     }
                     return updatedConversations;
                     });
                 }
             });
 
-            // // Nouvelle conversation
-            // socket.on("newConversation", async () => {
-            //     await fetchPrivateConversations();
-            // });
-
-            // Conversation supprimer
-            // socket.on("conversationDeleted", ({ conversationId }) => {
-            //     setConversations(prev => 
-            //         prev.filter(conv => conv._id !== conversationId)
-            //     )
-            //     if(currentConversation?._id === conversationId) {
-            //         clearConversationState()
-            //     }
-            // })
+            socket.on("conversationUpdated", (data) => {
+                setConversations(prev => {
+                    const updatedConversations = [...prev];
+                    const conversationIndex = updatedConversations.findIndex(
+                        conv => conv._id === data.conversation_id
+                    );
+                    if (conversationIndex !== -1) {
+                        updatedConversations[conversationIndex].lastMessage = data.lastMessage;
+                    }
+                    return updatedConversations;
+                })
+            })
 
             socket.on("newFile", (data) => {
                 if (currentConversation?._id === data.conversationId) {
@@ -216,10 +225,11 @@ export const MessageProvider = ({ children }) => {
 
         return () => {
             if(socket) {
-                socket.emit("leaveConversation", currentConversation?._id);
+                // socket.emit("leaveConversation", currentConversation?._id);
                 socket.off("messageReceived")
                 socket.off("messageModified")
                 socket.off("messageDeleted");
+                socket.off("conversationUpdated");
                 socket.off("conversationCreated");
                 socket.off("conversationRemoved");
                 socket.off("groupConversationCreated");
@@ -373,42 +383,14 @@ export const MessageProvider = ({ children }) => {
     }
 
     // GESTION DES MESSAGES 
-    const createMessage = async ( conversationId, contenu, fichier ) => {
+    const createMessage = async ( conversation_id, contenu, fichier ) => {
         try {
             const newMessage = await messageService.createMessage(
-                conversationId,
+                conversation_id,
                 contenu,
                 fichier
             )
 
-            // if(fichier) {
-            //     socket?.emit("fileUploaded", {
-            //         fichier: newMessage.fichier,
-            //         messageId: newMessage._id,
-            //         conversationId
-            //     })
-            // }
-            // Mise à jour immédiate des messages
-            // setMessages(prev => [...prev, newMessage]);
-
-            // setConversations(prev => {
-            //     const updatedConversations = [...prev]
-            //     const conversationIndex = updatedConversations.findIndex(
-            //         conv => conv._id === conversationId 
-            //     )
-            //     if(conversationIndex !== -1) {
-            //         updatedConversations[conversationIndex].lastMessage = newMessage;
-            //     }
-            //     return updatedConversations
-            // })
-            
-            // socket?.emit("newMessage", {
-            //     message: newMessage,
-            //     conversationId,
-            //     receiverId: currentConversation.otherParticipant._id
-            // })
-            // console.log("Nouveau message :", newMessage)
-            // setMessages((prev) => [...prev, newMessage])
             return newMessage
         } catch (err) {
             console.error("Erreur envoi du message:", err);
@@ -423,30 +405,9 @@ export const MessageProvider = ({ children }) => {
                 contenu
             )
 
-            setMessages((prev) => 
-                prev.map((msg => 
-                    msg._id === messageId ? { ...msg, contenu } : msg
-                ))
-            )
-                // Mettre à jour la conversation si nécessaire
-            setConversations(prev => {
-                const updatedConversations = [...prev];
-                const conversationIndex = updatedConversations.findIndex(
-                conv => conv._id === updateMessage.conversation_id
-                );
-                if (conversationIndex !== -1) {
-                updatedConversations[conversationIndex].lastMessage = updateMessage;
-                }
-                return updatedConversations;
-            });
-        
-            // Émettre l'événement pour le socket
-            socket?.emit("messageUpdated", {
-                conversationId: updateMessage.conversation_id,
-                message: updateMessage
-            });
+            console.log("message mis a jour :", updateMessage.data)
+            return updateMessage;
 
-            console.log("message mi a jour :", updateMessage)
         } catch (err) {
             console.error("Erreur dans updateMessage pour la mise a jour:", err);
             toast.error( err.message || "Erreur lors de la mise a jour du message")
@@ -455,33 +416,9 @@ export const MessageProvider = ({ children }) => {
 
     const deleteMessage = async (messageId) => {
         try {
-            const updatedMessage = await messageService.deleteMessage(messageId)
-            setMessages((prev) => 
-                prev.map((msg) => 
-                    msg._id === messageId
-                        ? { ...msg, ...updatedMessage }
-                        : msg
-                )
-            )
-            // Mettre à jour la conversation si nécessaire
-            setConversations(prev => {
-                const updatedConversations = [...prev];
-                const conversationIndex = updatedConversations.findIndex(
-                conv => conv._id === currentConversation._id
-                );
-                if (conversationIndex !== -1) {
-                updatedConversations[conversationIndex].lastMessage = null; // ou mettre à jour avec le dernier message valide
-                }
-                return updatedConversations;
-            });
-            socket?.emit("messageDeleted", {
-                conversationId: currentConversation._id,
-                messageId
-            });
+            await messageService.deleteMessage(messageId)
 
             toast.success("Message supprimé avec succès.")
-
-            // await fetchConversationMessages(currentConversation._id)
         } catch (error) {
             console.error("Erreur lors de la suppression du message dans deleteMessage:", error)
             toast.error(error.message || "Erreur lors de la suppression du message")

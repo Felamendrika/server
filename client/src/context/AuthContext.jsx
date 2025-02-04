@@ -9,6 +9,8 @@ import authService from "../services/authService";
 import { useNavigate } from "react-router-dom";
 import { fetchUserProfile } from "../services/userService";
 
+import { useSocket } from "./SocketContext";
+
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
@@ -16,6 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [token , setToken] = useState(localStorage.getItem("token") || "")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const navigate = useNavigate();
+  const { socket } = useSocket();
 
   // verification si un token est valide
   const isTokenValid = (token) => {
@@ -63,13 +66,16 @@ export const AuthProvider = ({ children }) => {
     try {
       // const response = await authService.login(credentials)
       const { user, token } = await authService.login(credentials)
-      setUser(user)
+      setUser(user || jwtDecode(token))
       setToken(token)
 
       saveToken(token)
       console.log("Token sauvergarde apres login:", token)
-      setUser(user || jwtDecode(token))
       setIsAuthenticated(true)
+
+      // Initialiser le socket immédiatement avec le nouveau token
+      socket?.emit("userConnected");
+      socket?.emit("getOnlineUsers");
 
       toast.success("Connexion reussie ! Bienvenue sur la plateforme");
       navigate("/dashboard")
@@ -115,13 +121,13 @@ export const AuthProvider = ({ children }) => {
       if (storedToken && isTokenValid(storedToken)) {
         loadUserFromToken(storedToken)
         setToken(storedToken)
-        /*const decoded = jwtDecode(storedToken)
-        console.log("Token decoder dans Initialisation:", decoded)
 
-        setUser(decoded)
-        setToken(storedToken)
-        setIsAuthenticated(true)
-        */
+        // Initialiser socket si token valide
+        if (socket) {
+          socket.emit("userConnected");
+          socket.emit("getOnlineUsers");
+        }
+
       } else if (storedToken) {
         refreshToken()
       }

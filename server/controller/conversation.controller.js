@@ -18,7 +18,7 @@ const findAdminRoleId = async () => {
 // Creation de conversation
 exports.createConversation = async (req, res) => {
   try {
-    const { type } = req.body;
+    const { type, receiver_id } = req.body;
 
     if (!req.user || !req.user._id || !req.user._id) {
       return res.status(401).json({
@@ -39,11 +39,17 @@ exports.createConversation = async (req, res) => {
       response = await createPrivateConversation(req);
 
       if (response.success && io) {
+        const populatedConversation = await Conversation.findById(
+          response.conversation._id
+        )
+          .populate("sender_id", "nom pseudo avatar")
+          .populate("receiver_id", "nom pseudo avatar");
+
         io.to(`user_${response.conversation.receiver_id}`).emit(
           "conversationCreated",
           {
             // type: "private",
-            conversation: response.conversation,
+            conversation: populatedConversation,
           }
         );
       }
@@ -70,22 +76,6 @@ exports.createConversation = async (req, res) => {
     } else {
       return res.status(response.status || 500).json(response);
     }
-
-    /*
-      // Verification si les utilisateurs existent
-      const receiver = await User.findById(receiver_id);
-      if (!receiver) {
-        return res.status(404).json({
-          message: "Utilisateur destinataire non trouvé.",
-        });
-      }
-
-      const sender = await User.findById(sender_id);
-      if (!sender) {
-        return res.status(404).json({
-          message: "Utilisateur emetteur non trouve",
-        });
-      } */
   } catch (error) {
     console.error("Erreur dans CreateConversation: ", error);
 
@@ -555,13 +545,23 @@ exports.deleteConversation = async (req, res) => {
         //   // type: "private",
         // });
       } else if (conversation.type === "group") {
-        io.to(`group_${conversation.group_id}`).emit(
+        const groupMembres = await Membre.find({
+          group_id: conversation.group_id,
+        });
+
+        groupMembres.forEach((membre) => {
+          io.to(`user_${membre.user_id}`).emit("groupConversationRemoved", {
+            conversationId,
+            groupId: conversation.group_id,
+          });
+        });
+        /*io.to(`group_${conversation.group_id}`).emit(
           "groupConversationRemoved",
           {
             conversationId,
             groupId: conversation.group_id,
           }
-        );
+        );*/
         // const groupMembres = await Membre.find({
         //   group_id: conversation.group_id,
         // });

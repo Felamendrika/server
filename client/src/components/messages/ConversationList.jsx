@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useEffect, useState} from "react"
+import { useCallback, useEffect, useState} from "react"
 import { FiSearch, FiPlusCircle } from "react-icons/fi"
 import { AiOutlineLoading3Quarters } from "react-icons/ai";
 import UserList from "./UsersList"
@@ -28,7 +28,12 @@ const ConversationList = () => {
         loading
     } = useMessage()
 
-    const { socket, isUserOnline} = useSocket()
+    const { socket, isUserOnline } = useSocket();  // Modification ici
+
+    // Fonction pour vérifier si un utilisateur est en ligne
+    // const isUserOnline = useCallback((userId) => {
+    //     return onlineUsers.includes(userId);
+    // }, [onlineUsers]);
 
     
     useEffect(() => {   
@@ -47,6 +52,12 @@ const ConversationList = () => {
     useEffect(() => {
         if (socket) {
 
+            // if(conversations.length > 0) {
+            //     conversations.forEach(conversation => {
+            //         socket.emit("joinConversation", conversation._id);
+            //     });
+            // }
+
             socket.on("conversationCreated", async (data) => {
                 await fetchPrivateConversations();
             });
@@ -58,26 +69,11 @@ const ConversationList = () => {
                 }
             });
 
-            socket.on("messageReceived", async (data) => {
-                if (currentConversation?._id === data.conversationId) {
-                    await fetchPrivateConversations()
-                }
-            })
-            socket.on("messageModified", async (data) => {
-                if (currentConversation?._id === data.conversationId) {
-                    await fetchPrivateConversations()
-                }
-            })
-            socket.on("messageDeleted", async (data) => {
-                if (currentConversation?._id === data.conversationId) {
-                    await fetchPrivateConversations()
-                }
-            })
-
             return () => {
                 socket.off("conversationCreated");
                 socket.off("conversationRemoved");
-                socket.off("messageReceived");
+                socket.off("conversationUpdated");
+                // socket.off("messageReceived");
             }
         }
     }, [socket,fetchPrivateConversations, currentConversation, setCurrentConversation])
@@ -85,6 +81,10 @@ const ConversationList = () => {
     // gestion du click
     const handleSelectConversation = async (conversation) => {
         if (currentConversation?._id === conversation._id) return; // Évite les rechargements inutiles
+        
+        if (currentConversation?._id) {
+            socket?.emit("leaveConversation", currentConversation._id);
+        }
         
         setCurrentConversation(conversation)
         await fetchConversationMessages(conversation._id)
@@ -94,8 +94,8 @@ const ConversationList = () => {
     }
 
     const filteredConversations = conversations.filter(conversation => 
-        conversation?.otherParticipant?.pseudo.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+        conversation?.otherParticipant?.pseudo?.toLowerCase().includes(searchTerm.toLowerCase())
+    ) || []
 
     const handleUserSelected = async (user) => {
         if (!user || !user._id) {
@@ -225,3 +225,25 @@ return (
 }
 
 export default ConversationList
+
+/*
+socket.on("messageReceived", async (data) => {
+                if (currentConversation?._id === data.conversation_id) {
+                    await fetchPrivateConversations()
+                }
+            })
+            socket.on("messageModified", async (data) => {
+                if (currentConversation?._id === data.conversation_id) {
+                    await fetchPrivateConversations()
+                }
+            })
+            socket.on("messageDeleted", async (data) => {
+                if (currentConversation?._id === data.conversation_id) {
+                    await fetchPrivateConversations()
+                }
+            })
+
+            socket.on("conversationUpdated", async (data) => {
+                await fetchPrivateConversations();
+            });
+*/

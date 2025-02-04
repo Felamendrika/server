@@ -3,7 +3,8 @@ const { verifyToken } = require("../utils/jwt");
 
 let io = null; // Instance globale
 
-let connectedUsers = [];
+// let connectedUsers = [];
+let connectedUsers = new Map();
 
 const initializeSocket = (server) => {
   // Config de socket.io
@@ -50,61 +51,76 @@ const initializeSocket = (server) => {
   io.on("connection", (socket) => {
     console.log(`Utilisateur connecté : ${socket.user?.id}`);
 
+    if (socket.user?.id) {
+      connectedUsers.set(socket.user.id, {
+        socketId: socket.id,
+        activeConversation: null,
+        lastSeen: Date.now(),
+      });
+    }
+
     socket.on("userConnected", () => {
-      if (!connectedUsers.includes(socket.user?.id)) {
-        connectedUsers.push(socket.user?.id);
-        // io.emit("userOnline", { userId: socket.user?.id });
-        io.emit("updateOnlineUsers", connectedUsers);
-        socket.broadcast.emit("userOnline", { userId: socket.user?.id });
+      if (socket.user?.id) {
+        socket.broadcast.emit("userOnline", { userId: socket.user.id });
+        io.emit("updateOnlineUsers", Array.from(connectedUsers.keys()));
       }
     });
 
-    // Répondre à la demande de liste
     socket.on("getOnlineUsers", () => {
-      socket.emit("updateOnlineUsers", connectedUsers);
+      socket.emit("updateOnlineUsers", Array.from(connectedUsers.keys()));
     });
 
     socket.on("joinConversation", (conversation_id) => {
-      socket.conversation_id = conversation_id;
-      const room = `conversation_${conversation_id}`;
-      socket.join(room);
-      console.log(
-        `User ${socket.user.id} a rejoint la conversation ${conversation_id}`
-      );
-    });
-
-    socket.on("leaveConversation", (conversation_id) => {
-      if (socket.conversation_id === conversation_id) {
-        const room = `conversation_${conversation_id}`;
-        socket.leave(room);
+      if (socket.user?.id) {
+        const userInfo = connectedUsers.get(socket.user.id);
+        if (userInfo) {
+          userInfo.activeConversation = conversation_id;
+          connectedUsers.set(socket.user.id, userInfo);
+        }
+        socket.join(`conversation_${conversation_id}`);
         console.log(
-          `User ${socket.user.id} a quitter la conversation ${conversation_id}`
+          `User ${socket.user.id} a rejoint la conversation ${conversation_id}`
         );
       }
     });
 
+    socket.on("leaveConversation", (conversation_id) => {
+      if (socket.user?.id) {
+        const userInfo = connectedUsers.get(socket.user.id);
+        if (userInfo) {
+          userInfo.activeConversation = null;
+          connectedUsers.set(socket.user.id, userInfo);
+        }
+        socket.leave(`conversation_${conversation_id}`);
+      }
+    });
+
+    //gestion de message
     socket.on("newMessage", (data) => {
-      const { conversationId, message } = data;
-      io.to(`conversation_${conversationId}`).emit("messageReceived", {
+      const { conversation_id, message, receiverId } = data;
+      const roomName = `conversation_${conversationId}`;
+
+      //Emission aux utilisateurs dans la conversation
+      io.to(roomName).emit("messageReceived", {
         message,
-        conversationId,
+        conversation_id: conversation_id,
+        senderId: socket.user.id,
+        timestamp: Date.now(),
       });
 
-      // Notification pour les utilisateurs dans la conversation
-      // if (
-      //   connectedUsers.includes(receiverId) &&
-      //   socket.conversation_id === conversationId
-      // ) {
-      //   io.to(`user_${receiverId}`).emit("newMessageNotification", {
-      //     senderId: socket.user.id,
-      //     // senderName: socket.user.pseudo,
-      //     conversationId: conversationId,
-      //     message: `Nouveau message de ${socket.user?.pseudo}`,
-      //   });
-      // }
+      // mise a jour de la conversation pour le destinataire
+      const receiverSocket = Array.from(io.sockets.sockets.values()).find(
+        (s) => s.user?.id === receiverId
+      );
 
+      if (receiverSocket) {
+        receiverSocket.emit("conversationUpdated", {
+          conversation_id,
+          lastMessage: message,
+        });
+      }
       console.log(
-        `Message envoyé dans conversation ${conversationId} par ${socket.user?.id}:`,
+        `Message envoyé dans la conversation ${conversation_id}:`,
         message
       );
     });
@@ -113,7 +129,13 @@ const initializeSocket = (server) => {
       const { conversationId, message } = data;
       io.to(`conversation_${conversationId}`).emit("messageModified", {
         message,
-        conversation_id: conversationId,
+        conversationId,
+        timestamp: Date.now(),
+      });
+
+      io.emit("conversationUpdated", {
+        conversationId,
+        lastMessage: message,
       });
 
       console.log(`Message maj dans conversation ${conversationId}:`, message);
@@ -123,7 +145,13 @@ const initializeSocket = (server) => {
       const { conversationId, messageId } = data;
       io.to(`conversation_${conversationId}`).emit("messageDeleted", {
         messageId,
-        conversation_id: conversationId,
+        conversationId,
+        timestamp: Date.now(),
+      });
+
+      io.emit("conversationUpdated", {
+        conversationId,
+        lastMessage: { contenu: "Message supprimé", isDeleted: true },
       });
 
       console.log(`Message supprimer dans conversation ${conversationId}`);
@@ -132,11 +160,15 @@ const initializeSocket = (server) => {
     socket.on("newPrivateConversation", (data) => {
       const { conversation, receiverId } = data;
       io.to(`user_${receiverId}`).emit("ConversationCreated", { conversation });
+      console.log(
+        `Nouvelle conversation créée pour l'utilisateur ${receiverId}`
+      );
     });
 
     socket.on("conversationDeleted", (data) => {
-      io.to(`conversation_${data.conversationId}`).emit("conversationRemoved", {
-        conversationId: data.conversationId,
+      const { conversationId } = data;
+      io.to(`conversation_${conversationId}`).emit("conversationRemoved", {
+        conversationId,
       });
     });
 
@@ -166,12 +198,15 @@ const initializeSocket = (server) => {
     });
 
     socket.on("fileDeleted", (data) => {
-      io.to(`conversation_${data.conversationId}`).emit("fileRemoved", {
-        fichierId: data.fichierId,
-        messageId: data.messageId,
-        conversationId: data.conversationId,
+      const { conversationId, messageId, fichierId } = data;
+      io.to(`conversation_${conversationId}`).emit("fileRemoved", {
+        fichierId,
+        messageId,
+        conversationId,
       });
-      console.log(`Fichier supprimé de la conversation ${data.conversationId}`);
+      console.log(
+        `Fichier supprimé de la conversation ${data.conversation_id}`
+      );
     });
 
     socket.on("conversationFilesUpdated", (data) => {
@@ -188,26 +223,104 @@ const initializeSocket = (server) => {
 
     // GESTION DE FICHIERS
     socket.on("eventCreated", (eventData) => {
-      io.emit("newEvent", eventData);
-      console.log(`Nouvel événement créé:`, eventData);
+      io.emit("newEvent", {
+        event: eventData.event,
+      });
+      console.log(`Nouvel événement créé:`, eventData.event);
     });
 
     socket.on("eventUpdated", (eventData) => {
-      io.to(`event_${eventData.eventId}`).emit("eventModified", eventData);
-      console.log(`Événement mis à jour:`, eventData);
+      io.emit("eventModified", {
+        event: eventData.event,
+        eventId: eventData.eventId,
+      });
+      console.log(`Événement mis à jour:`, eventData.event);
     });
 
     socket.on("eventDeleted", ({ eventId }) => {
-      io.emit("eventRemoved", { eventId });
+      io.emit("eventRemoved", {
+        eventId,
+      });
       console.log(`Événement supprimé:`, eventId);
     });
 
+    // GESTION DE DECONNEXION
     socket.on("disconnect", () => {
+      if (socket.user?.id) {
+        connectedUsers.delete(socket.user.id);
+        socket.broadcast.emit("userOffline", { userId: socket.user?.id });
+        io.emit("updateOnlineUsers", Array.from(connectedUsers.keys()));
+      }
+    });
+
+    /*socket.on("userConnected", () => {
+      if (!connectedUsers.includes(socket.user?.id)) {
+        connectedUsers.push(socket.user?.id);
+        // io.emit("userOnline", { userId: socket.user?.id });
+        io.emit("updateOnlineUsers", connectedUsers);
+        socket.broadcast.emit("userOnline", { userId: socket.user?.id });
+      }
+    }); 
+
+    // Répondre à la demande de liste
+    socket.on("getOnlineUsers", () => {
+      socket.emit("updateOnlineUsers", connectedUsers);
+    });
+
+      socket.on("joinConversation", (conversation_id) => {
+      socket.conversation_id = conversation_id;
+      const room = `conversation_${conversation_id}`;
+      socket.join(room);
+      console.log(
+        `User ${socket.user.id} a rejoint la conversation ${conversation_id}`
+      );
+    });
+
+    
+    socket.on("leaveConversation", (conversation_id) => {
+      if (socket.conversation_id === conversation_id) {
+        const room = `conversation_${conversation_id}`;
+        socket.leave(room);
+        console.log(
+          `User ${socket.user.id} a quitter la conversation ${conversation_id}`
+        );
+      }
+    });
+
+      socket.on("newMessage", (data) => {
+      const { conversationId, message } = data;
+      io.to(`conversation_${conversationId}`).emit("messageReceived", {
+        message,
+        conversationId,
+      });
+
+      // Notification pour les utilisateurs dans la conversation
+      // if (
+      //   connectedUsers.includes(receiverId) &&
+      //   socket.conversation_id === conversationId
+      // ) {
+      //   io.to(`user_${receiverId}`).emit("newMessageNotification", {
+      //     senderId: socket.user.id,
+      //     // senderName: socket.user.pseudo,
+      //     conversationId: conversationId,
+      //     message: `Nouveau message de ${socket.user?.pseudo}`,
+      //   });
+      // }
+
+      console.log(
+        `Message envoyé dans conversation ${conversationId} par ${socket.user?.id}:`,
+        message
+      );
+    });
+
+      socket.on("disconnect", () => {
       console.log(`Utilisateur déconnecté : ${socket.user.id}`);
       connectedUsers = connectedUsers.filter((id) => id !== socket.user?.id);
       io.emit("updateOnlineUsers", connectedUsers);
       socket.broadcast.emit("userOffline", { userId: socket.user?.id });
     });
+    
+    */
   });
 
   return io;
@@ -223,110 +336,3 @@ const getIO = () => {
 };
 
 module.exports = { initializeSocket, getIO };
-/*
-socket.on("joinConversation", (conversationId) => {
-      socket.join(`conversation_${conversationId}`);
-      console.log(
-        `Utilisateur ${socket.userId} a rejoint la conversation ${conversationId}`
-      );
-    });
-
-    //quitter la conversation
-    socket.on("leaveConversation", (conversationId) => {
-      socket.leave(`conversation_${conversationId}`);
-      console.log(
-        `Utilisateur ${socket.userId} a quitté la conversation ${conversationId}`
-      );
-    });
-
-    // nouveau message
-    socket.on("newMessage", (messageData) => {
-      const room = `conversation_${messageData.conversationId}`;
-      socket.to(room).emit("messageReceived", messageData);
-    });
-
-    // Message modifié
-    socket.on("messageUpdated", (messageData) => {
-      const room = `conversation_${messageData.conversation_id}`;
-      socket.to(room).emit("messageModified", messageData);
-    });
-
-    // Message supprimé
-    socket.on("messageDeleted", (messageData) => {
-      const room = `conversation_${messageData.conversation_id}`;
-      socket.to(room).emit("messageRemoved", messageData);
-    });
-
-    // Nouvelle conversation
-    socket.on("newConversation", (conversationData) => {
-      const { participants } = conversationData;
-      participants.forEach((participantId) => {
-        if (participantId !== socket.userId) {
-          io.to(`user_${participantId}`).emit(
-            "conversationCreated",
-            conversationData
-          );
-        }
-      });
-    });
-
-    // Conversation supprimée
-    socket.on("conversationDeleted", (conversationData) => {
-      const room = `conversation_${conversationData.conversationId}`;
-      io.to(room).emit("conversationRemoved", conversationData);
-    });
-
-    // Gestion des notifications
-    socket.on("messageNotification", (notificationData) => {
-      const { receiverId, messageData } = notificationData;
-      io.to(`user_${receiverId}`).emit("newMessageNotification", messageData);
-    });
-
-    // evenement groupe
-    socket.on("joinGroup", (groupId) => {
-      socket.join(`group_${groupId}`);
-      console.log(`User ${socket.userId} a rejoint le groupe ${groupId}`);
-    });
-
-    socket.on("leaveGroup", (groupId) => {
-      console.log(`User ${socket.userId} left group ${groupId}`);
-    });
-
-    // notification de groupe
-    socket.on("groupCreated", (groupData) => {
-      io.emit("newGroup", groupData);
-    });
-
-    socket.on("groupUpdated", (groupData) => {
-      io.to(`group_${groupData.groupId}`).emit("groupModified", groupData);
-    });
-
-    socket.on("groupDeleted", (groupId) => {
-      io.emit("groupRemoved", { groupId });
-    });
-
-    socket.on("newMembre", ({ groupId, membreId, role }) => {
-      io.to(`group_${groupId}`).emit("membreAdded", {
-        groupId,
-        membreId,
-        role,
-      });
-    });
-
-    socket.on("membreRemoved", ({ groupId, membreId }) => {
-      io.to(`group_${groupId}`).emit("membreDeleted", { groupId, membreId });
-    });
-
-    socket.on("membreRoleUpdated", ({ groupId, membreId, newRole }) => {
-      io.to(`group_${groupId}`).emit("membreRoleChanged", {
-        groupId,
-        membreId,
-        newRole,
-      });
-    });
-
-    socket.on("membreLeft", ({ groupId, membreId }) => {
-      io.to(`group_${groupId}`).emit("membreLeftGroup", { groupId, membreId });
-    });
-
-*/

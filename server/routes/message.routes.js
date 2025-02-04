@@ -6,7 +6,7 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const uploadMiddleware = require("../middlewares/uploadMiddleware");
 
 // route pour recuperer tout les messages
-router.get("/", authMiddleware, messageController.getMessages);
+router.get("/", authMiddleware, messageController.getAllMessages);
 
 // route pour recuperer un message par son ID
 router.get("/:messageId", authMiddleware, messageController.getMessageById);
@@ -31,8 +31,6 @@ router.put(
   authMiddleware,
   messageController.updateMessageStatus
 );
-
-router.get("/search", authMiddleware, messageController.searchMessage);
 
 // Route pour upload fichier et creation fichier
 router.post(

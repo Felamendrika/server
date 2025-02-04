@@ -1,7 +1,7 @@
 
 
-import { useState } from "react";
-import { NavLink } from "react-router-dom"
+import { useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import {useMessage} from "../../context/MessageContext"
 // import { useNotification } from "../../context/NotifContext";
@@ -17,22 +17,38 @@ import Logo from "../../assets/Region.png"
 
 const Sidebar = () => {
     const { logout } = useAuth()
-    const { clearConversationState } = useMessage()
+    const { clearConversationState, conversations ,fetchPrivateConversations } = useMessage()
     // const { unreadCount } = useNotification();
+    const [activePage, setActivePage] = useState("messages");
+    // const navigate = useNavigate();
+    const location = useLocation();
 
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
-    const handleNavigation = () => {
-        clearConversationState()
+    useEffect(() => {
+        const currentPath = location.pathname;
+        if (currentPath === "/dashboard" || currentPath === "/dashboard/messages") {
+            setActivePage("messages");
+            if (!conversations.length) {
+                fetchPrivateConversations();
+            }
+        }
+    }, [location, fetchPrivateConversations, conversations]);
+
+    const handleNavigation = (pageName) => {
+        setActivePage(pageName)
+        if (pageName !== "messages") {
+            clearConversationState()
+        }
     }
     const handleLogout = () => {
         logout()
     }
 
     const menuItems = [
-        { name: "Messages", icon: <TfiCommentAlt/>, path: "/dashboard/messages", onClick: handleNavigation },
-        { name: "Groupes", icon: <PiUsers/>, path: "/dashboard/groups", onClick: handleNavigation },
-        { name: "Calendrier Partagé", icon: <BsCalendar2Event/>, path: "/dashboard/calendrier", onClick: handleNavigation },
+        { name: "Messages", icon: <TfiCommentAlt/>, path: "/dashboard/messages", id: "messages",onClick: handleNavigation },
+        { name: "Groupes", icon: <PiUsers/>, path: "/dashboard/groups", id:"groups" ,onClick: handleNavigation },
+        { name: "Calendrier Partagé", icon: <BsCalendar2Event/>, path: "/dashboard/calendrier", id:"calendar", onClick: handleNavigation },
     ]
     return (
 
@@ -51,11 +67,14 @@ const Sidebar = () => {
                     <NavLink
                         to={item.path}
                         key={index}
-                        onClick={item.onClick}
+                        onClick={() => handleNavigation(item.id)}
+                        // onClick={item.onClick}
                         aria-label={item.name}
                         className={({isActive}) => 
                             `flex flex-col items-center w-full text-black p-2 rounded-lg transition ${
-                                isActive ? "bg-white shadow-md font-bold" : "hover:bg-white shadow-md"
+                                isActive || (item.id === "messages" && activePage === "messages")
+                                    ? "bg-white shadow-md font-bold" 
+                                    : "hover:bg-white shadow-md"
                             }`
                         }
                     >

@@ -53,7 +53,7 @@ const CalendarDisplay = () => {
 
   useEffect(() => {
     if(socket) {
-      socket.on("eventCreated", (data) => {
+      socket.on("newEvent", (data) => {
         fetchEvents(); // Recharger les événements après création
       });
   
@@ -66,7 +66,7 @@ const CalendarDisplay = () => {
       });
   
       return () => {
-        socket.off("eventCreated");
+        socket.off("newEvent");
         socket.off("eventModified");
         socket.off("eventRemoved");
       };

@@ -29,7 +29,6 @@ const EventForm = ({ onClose, selectedEvent }) => {
     date_debut: new Date(),
     date_fin: new Date(),
     createur_id: "",
-    participants: []
   })
 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -49,7 +48,6 @@ const EventForm = ({ onClose, selectedEvent }) => {
           ? new Date(selectedEvent.date_fin).toISOString().slice(0, 16)
           : "",
         createur_id: selectedEvent.createur_id || "",
-        participants: selectedEvent.participants || []
       })
     } else {
       setEventData({
@@ -58,7 +56,6 @@ const EventForm = ({ onClose, selectedEvent }) => {
         date_debut: new Date(),
         date_fin: new Date(),
         createur_id: "",
-        participants: []
       })
     }
   }, [selectedEvent])
@@ -147,7 +144,7 @@ const EventForm = ({ onClose, selectedEvent }) => {
               <p className="block font-medium">Créateur de l’événement: </p>
             <img
               src={selectedEvent.createur_id.avatar}
-              alt={`${selectedEvent.createur_id.nom} ${selectedEvent.createur_id.prenom}`}
+              alt={`${selectedEvent.createur_id.nom}`}
               className="w-12 h-12 rounded-full"
             />
             <div>

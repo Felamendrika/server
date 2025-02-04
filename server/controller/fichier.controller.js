@@ -387,7 +387,7 @@ exports.deleteFile = async (req, res) => {
       return res.status(404).json({ message: "Message associé introuvable" });
     }
 
-    const conversationId = message.conversation_id;
+    const conversation_id = message.conversation_id;
 
     // suppression du fichier du serveur
     const filePath = path.resolve(fichier.chemin_fichier);
@@ -412,10 +412,10 @@ exports.deleteFile = async (req, res) => {
 
     const io = getIO();
     if (io) {
-      io.to(`conversation_${conversationId}`).emit("fileRemoved", {
+      io.to(`conversation_${conversation_id}`).emit("fileRemoved", {
         fichierId,
         messageId: message._id,
-        conversationId,
+        conversation_id: conversation_id,
       });
     } else {
       console.warn("Socket.IO non disponible pour la diffusion.");

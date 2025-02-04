@@ -92,14 +92,14 @@ export const getPastEvents = async () => {
   }
 };
 
-export const searchEvents = async (query) => {
-  try {
-    const response = await api.get(`/events/search?${query}`, {
-      params: { titre: query },
-    });
-    return response.data;
-  } catch (error) {
-    console.error("Erreur recherche event par titre :", error.message);
-    throw error.response?.data || error.message;
-  }
-};
+// export const searchEvents = async (query) => {
+//   try {
+//     const response = await api.get(`/events/search?${query}`, {
+//       params: { titre: query },
+//     });
+//     return response.data;
+//   } catch (error) {
+//     console.error("Erreur recherche event par titre :", error.message);
+//     throw error.response?.data || error.message;
+//   }
+// };

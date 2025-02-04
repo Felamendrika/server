@@ -77,17 +77,17 @@ exports.createEvent = async (req, res) => {
     const newEvent = await event.save();
 
     // Populate after saving
-    const populatedEvent = await Event.findById(newEvent._id).populate(
-      "createur_id",
-      "nom prenom pseudo avatar"
-    );
 
     // diffusion via socket
     const io = getIO();
     if (io) {
+      const populatedEvent = await Event.findById(newEvent._id).populate(
+        "createur_id",
+        "nom prenom pseudo avatar"
+      );
       io.emit("eventCreated", {
         event: populatedEvent,
-        message: `Nouvel événement créé: ${newEvent.titre}`,
+        // message: `Nouvel événement créé: ${newEvent.titre}`,
       });
     } else {
       console.error("Socket.IO non initialisé");
@@ -373,8 +373,13 @@ exports.updateEvent = async (req, res) => {
     // socket.io
     const io = getIO();
     if (io) {
+      const populatedEvent = await Event.findById(updatedEvent._id).populate(
+        "createur_id",
+        "nom prenom pseudo avatar"
+      );
+
       io.emit("eventUpdated", {
-        event: updatedEvent,
+        event: populatedEvent,
         eventId: eventId, //updatedEvent._id
         message: `L'événement "${updatedEvent.titre}" a été mis à jour`,
       });

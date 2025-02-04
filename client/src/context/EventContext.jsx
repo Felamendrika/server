@@ -26,7 +26,7 @@ export const EventProvider = ({ children }) => {
     useEffect(() => {
         if (socket) {
 
-            socket.on("eventCreated", (data) => {
+            socket.on("newEvent", (data) => {
                 setEvents(prev => [...prev, data.event]);
             });
 
@@ -43,7 +43,7 @@ export const EventProvider = ({ children }) => {
             });
 
             return () => {
-                socket.off("eventCreated");
+                socket.off("newEvent");
                 socket.off("eventModified");
                 socket.off("eventRemoved");
             };

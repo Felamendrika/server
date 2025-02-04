@@ -152,44 +152,53 @@ exports.createMessage = async (req, res) => {
     }
 
     await newMessage.save();
+    await newMessage.populate([
+      { path: "user_id", select: "_id nom pseudo avatar" },
+      { path: "fichier", select: " _id nom type taille chemin_fichier" },
+    ]);
 
     // modif pour fichiers
     // Population des données nécessaires
-    const populatedMessage = await Message.findById(newMessage._id)
+    /*const populatedMessage = await Message.findById(newMessage._id)
       .populate("user_id", "nom pseudo avatar")
-      .populate("fichier");
+      .populate("fichier"); */
 
     const io = getIO();
     // Notifier tous les utilisateurs de la conversation
     if (io) {
       const roomName = `conversation_${conversation_id}`;
+      // modif news
+      const messagePayload = {
+        ...newMessage._doc,
+        user_id: {
+          _id: user_id,
+          nom: req.user.nom,
+          pseudo: req.user.pseudo,
+          avatar: req.user.avatar,
+        },
+        timestamp: Date.now(),
+      };
+
       io.to(roomName).emit("messageReceived", {
-        message: populatedMessage,
-        // message: {
-        //   ...newMessage._doc,
-        //   user_id: {
-        //     _id: user_id,
-        //     nom: req.user.nom,
-        //     pseudo: req.user.pseudo,
-        //     avatar: req.user.avatar,
-        //   },
-        // },
+        //message: populatedMessage,
+        message: messagePayload,
         conversation_id: conversation_id,
-        // receiverId: receiverId,
-        fichier: fichier || null,
+        fichier,
+        // fichier: fichier || null,
       });
-      console.log("Message socket:", populatedMessage);
+
+      io.emit("conversationUpdated", {
+        conversation_id: conversation_id,
+        lastMessage: messagePayload,
+      });
+
+      // console.log("Message socket:", populatedMessage);
     } else {
       console.warn("Socket.IO non disponible pour la diffusion.");
       return res.status(500).json({
         message:
           "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
       });
-    }
-
-    if (!io) {
-      console.error("Socket.IO non initialisé");
-      return res.status(500).json({ message: "Erreur serveur interne" });
     }
 
     res.status(201).json({
@@ -221,7 +230,7 @@ exports.createMessage = async (req, res) => {
 };
 
 // recuperer tout les messages avec paginations et filtres
-exports.getMessages = async (req, res) => {
+exports.getAllMessages = async (req, res) => {
   try {
     const { conversation_id, page = 1, limit = 10 } = req.query;
 
@@ -332,7 +341,10 @@ exports.updateMessage = async (req, res) => {
       messageId,
       { contenu },
       { new: true }
-    );
+    ).populate([
+      { path: "user_id", select: "_id nom pseudo avatar" },
+      { path: "fichier", select: "nom type taille chemin_fichier" },
+    ]);
 
     if (!updatedMessage) {
       return res.status(404).json({
@@ -344,14 +356,26 @@ exports.updateMessage = async (req, res) => {
 
     // Notifier du changement
     if (io) {
+      // modif news
+      const messagePayload = {
+        ...updatedMessage._doc,
+        timestamp: Date.now(),
+      };
+
       io.to(`conversation_${updatedMessage.conversation_id}`).emit(
         "messageModified",
         {
-          message: updatedMessage,
+          // message: updatedMessage,
+          message: messagePayload,
           conversation_id: updatedMessage.conversation_id,
           // sender_id: updatedMessage.user_id,
         }
       );
+
+      io.emit("conversationUpdated", {
+        conversation_id: updatedMessage.conversation_id,
+        lastMessage: messagePayload,
+      });
     } else {
       console.warn("Socket.IO non disponible pour la diffusion.");
       return res.status(500).json({
@@ -424,8 +448,20 @@ exports.deleteMessage = async (req, res) => {
     if (io) {
       io.to(`conversation_${conversation_id}`).emit("messageDeleted", {
         messageId: message._id,
-        conversationId: conversation_id,
+        conversation_id: conversation_id,
+        timestamp: Date.now(),
         // message: "Un message a ete supprimé",
+      });
+
+      io.emit("conversationUpdated", {
+        conversation_id: conversation_id,
+        lastMessage: {
+          _id: message._id,
+          contenu: "Message supprimé",
+          isDeleted: true,
+          date_envoi: message.date_envoi,
+          user_id: message.user_id,
+        },
       });
     } else {
       console.warn("Socket.IO non disponible pour la diffusion.");
@@ -487,44 +523,6 @@ exports.updateMessageStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Erreur du serveur lors de la mise à jour du statut du message",
-      error: error.message,
-    });
-  }
-};
-
-// recherche de message par contenu
-exports.searchMessage = async (req, res) => {
-  const { query, page = 1, limit = 10, user_id, groupId } = req.body;
-  const skip = (page - 1) * limit;
-
-  const filters = {};
-  if (user_id) filters.user_id = user_id;
-  if (groupId) filters.group_id = groupId;
-
-  try {
-    const messages = await Message.find({
-      $text: { $search: query }, // recherche full-text sur le contenu
-      ...filters, // application du filtre
-    })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .exec();
-
-    const totalMessages = await Message.countDocuments({
-      $text: { $search: query },
-      ...filters,
-    });
-
-    res.json({
-      total: totalMessages,
-      page,
-      totalPages: Math.ceil(totalMessages / limit),
-      messages,
-    });
-  } catch (error) {
-    res.status(500).json({
-      succes: false,
-      message: "Erreur serveur lors de la recherche de messages",
       error: error.message,
     });
   }

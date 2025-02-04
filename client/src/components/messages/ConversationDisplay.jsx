@@ -1,5 +1,5 @@
 
-import {useEffect, useRef,useState} from 'react'
+import {useCallback, useEffect, useRef,useState} from 'react'
 
 import { FiPaperclip, FiTrash2, FiSmile, FiMoreHorizontal, FiX } from 'react-icons/fi'
 import EmojiPicker from 'emoji-picker-react'
@@ -42,15 +42,15 @@ const ConversationDisplay = () => {
   const scrollRef = useRef(null)
   const dropdownRef = useRef(null)
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }
+  }, [])
     // Défiler automatiquement jusqu'au dernier message
     useEffect(() => {
       scrollToBottom()
-    }, [messages, currentConversation]);
+    }, [messages, currentConversation, scrollToBottom]);
 
   // useEffect(() => {
   //   if (currentConversation) {
@@ -60,15 +60,15 @@ const ConversationDisplay = () => {
 
   useEffect(() => {
     if (socket && currentConversation?._id) {
-      // socket.emit("joinConversation", currentConversation._id)
+      socket.emit("joinConversation", currentConversation._id)
 
       
-      const handleMessageReceived = (data) => {
-        if (currentConversation._id === data.conversation_id) {
-          // fetchConversationMessages(currentConversation._id);
-          scrollToBottom();
-        }
-      };
+      // const handleMessageReceived = (data) => {
+      //   if (currentConversation._id === data.conversation_id) {
+      //     // fetchConversationMessages(currentConversation._id);
+      //     scrollToBottom();
+      //   }
+      // };
 
       const handleMessageModified = (data) => {
         if (currentConversation._id === data.conversation_id) {
@@ -88,14 +88,14 @@ const ConversationDisplay = () => {
         }
       };
 
-      socket.on("messageReceived", handleMessageReceived);
+      // socket.on("messageReceived", handleMessageReceived);
       socket.on("messageModified", handleMessageModified);
       socket.on("messageDeleted", handleMessageDeleted);
       socket.on("conversationRemoved", handleConversationRemoved);
 
       return () => {
-        // socket.emit("leaveConversation", currentConversation._id);
-        socket.off("messageReceived", handleMessageReceived);
+        socket.emit("leaveConversation", currentConversation._id);
+        // socket.off("messageReceived", handleMessageReceived);
         socket.off("messageModified", handleMessageModified);
         socket.off("messageDeleted", handleMessageDeleted);
         socket.off("conversationRemoved", handleConversationRemoved);
@@ -147,6 +147,11 @@ const ConversationDisplay = () => {
       } else {
         // setIsSending(true);
         await createMessage(currentConversation._id, messageContent, file)
+        // socket?.emit("newMessage", {
+        //   conversation_id: currentConversation._id,
+        //   message: newMessage,
+        //   receiverId: currentConversation.otherParticipant._id
+        // });
 
       }
 
@@ -174,6 +179,7 @@ const ConversationDisplay = () => {
   const handleCancelEdit = () => {
     setEditingMessageId(null)
     setMessageContent("")
+    setFilePreview(null)
   }
 
   const handleDeleteMessage = async (messageId) => {
