@@ -1,6 +1,7 @@
 const Event = require("../models/event.model");
 const User = require("../models/user.model");
 const Participant = require("../models/participant.model");
+const Group = require("../models/group.model");
 
 const { isValidObjectId } = require("mongoose");
 const { getIO } = require("../socket/socket");
@@ -10,7 +11,8 @@ const { getIO } = require("../socket/socket");
 // Création d'un événement
 exports.createEvent = async (req, res) => {
   try {
-    const { titre, description, date_debut, date_fin } = req.body;
+    const { titre, description, date_debut, date_fin, type, group_id } =
+      req.body;
     const createur_id = req.user?._id || req.user?.id;
 
     if (!req.user || !req.user._id || !req.user.id) {
@@ -37,6 +39,28 @@ exports.createEvent = async (req, res) => {
       });
     }
 
+    // verification validiter du type
+    if (!["public", "private", "group"].includes(type)) {
+      return res.status(400).json({
+        message: "Type d'événement invalide",
+      });
+    }
+
+    // verification de la cohernece des events de groupe
+    if (type === "group") {
+      if (!group_id) {
+        return res.status(400).json({
+          message: "ID du groupe est obligatoire pour un événement de groupe",
+        });
+      }
+      const group = await Group.findById(group_id);
+      if (!group) {
+        return res.status(404).json({
+          message: "Groupe non trouvé",
+        });
+      }
+    }
+
     // Vérification de l'existence de l'utilisateur créateur
     const user = await User.findById(createur_id);
     if (!user) {
@@ -46,7 +70,7 @@ exports.createEvent = async (req, res) => {
     }
 
     // verification des dates
-    if (new Date(date_debut) > new Date(date_fin)) {
+    if (new Date(date_debut) >= new Date(date_fin)) {
       return res.status(400).json({
         message: "La date de début ne peut pas être après la date de fin",
       });
@@ -66,6 +90,8 @@ exports.createEvent = async (req, res) => {
       date_debut,
       date_fin,
       createur_id,
+      type,
+      group_id,
     });
 
     if (!event) {
@@ -77,6 +103,7 @@ exports.createEvent = async (req, res) => {
     const newEvent = await event.save();
     await newEvent.populate([
       { path: "createur_id", select: " _id nom prenom pseudo avatar" },
+      { path: "group_id", select: "nom" },
     ]);
 
     // Populate after saving
@@ -209,6 +236,41 @@ exports.getEventById = async (req, res) => {
   }
 };
 
+// Récupérer les événements filtrer (public, private, group)
+exports.getFilteredEvents = async (req, res) => {
+  try {
+    const { type } = req.query;
+    const createur_id = req.user || req.user?.id || req.user?._id;
+
+    if (!["public", "private", "group"].includes(type)) {
+      return res.status(400).json({
+        message: "Type d''événement invalide",
+      });
+    }
+
+    let events;
+    if (type === "public") {
+      events = await Event.find({ type: "public" });
+    } else if (type === "private") {
+      events = await Event.find({ type: "private", createur_id: createur_id });
+    } else {
+      events = await Event.find({ type: "group" }).populate("group_id", "nom");
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Voici les evenements recuperer selon le filtre :",
+      data: events,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Erreur serveur lors de la récupération des événements filterer",
+      error: error.message,
+    });
+  }
+};
+
 // Evenement d'un utilisateur
 exports.getUserEvents = async (req, res) => {
   try {
@@ -262,6 +324,40 @@ exports.getUserEvents = async (req, res) => {
       success: false,
       message:
         "Erreur serveur lors de la recuperation des evenement de l'utilisateur",
+      error: error.message,
+    });
+  }
+};
+
+// Recuperation des evenements d'un groupe
+exports.getGroupEvents = async (req, res) => {
+  try {
+    const { group_id } = req.params;
+    const group = await Group.findById(group_id);
+
+    if (!group || !isValidObjectId(group_id)) {
+      return re.status(404).json({
+        message: "Groupe non trouvé ou ID invalide",
+      });
+    }
+
+    const events = await Event.find({ type: "group", group_id: group_id });
+    if (!events || events.length === 0) {
+      return res.status(404).json({
+        message: "Aucun evenement trouvé pour ce groupe",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Voici les evenements de ce groupe",
+      data: events,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message:
+        "Erreur serveur lors de la recuperation des evenements du groupe",
       error: error.message,
     });
   }
@@ -324,7 +420,7 @@ exports.getPastEvents = async (req, res) => {
 // Mise à jour d'un événement
 exports.updateEvent = async (req, res) => {
   try {
-    const { titre, description, date_debut, date_fin } = req.body;
+    const { titre, description, date_debut, date_fin, type } = req.body;
     const { eventId } = req.params;
     const userId = req.user?._id || req.user?.id;
 
@@ -370,9 +466,42 @@ exports.updateEvent = async (req, res) => {
         });
       }
     }
+
+    // verifier si le type de l'event a ete modifier
+    if (type && type !== event.type) {
+      // Passer de PUBLIC -> PRIVATE
+      if (event.type === "public" && type === "private") {
+        await Participant.create({ user_id: userId, event_id: eventId });
+      }
+
+      // Passer de PRIVATE -> PUBLIC
+      if (event.type === "private" && type === "public") {
+        await Participant.deleteMany({ event_id: eventId });
+      }
+
+      // Passer de GROUP a PUBLIC ou PRIVATE
+      if (event.type === "group" && (type === "public" || type === "private")) {
+        event.group_id = null;
+      }
+
+      // Passer de PUBLIC ou PRIVATE -> GROUP
+      if (
+        (event.type === "public" || event.type === "private") &&
+        type === "group"
+      ) {
+        return res.status(400).json({
+          message:
+            "Impossible de passer d'un event public ou private a un event groupe",
+        });
+      }
+
+      // appliquer le noueau type
+      event.type = type;
+    }
+
     const updatedEvent = await Event.findByIdAndUpdate(
       eventId,
-      { titre, description, date_debut, date_fin },
+      { titre, description, date_debut, date_fin, type },
       { new: true, runValidators: true } //active les validation de modele
     ).populate("createur_id", "nom prenom pseudo avatar");
 
@@ -450,6 +579,7 @@ exports.deleteEvent = async (req, res) => {
         message: "ID evenement invalide",
       });
     }
+
     const event = await Event.findById(eventId);
 
     // const deleteEvent = await Event.findByIdAndDelete( eventId )
@@ -518,7 +648,7 @@ exports.deleteEvent = async (req, res) => {
   }
 };
 
-// rechercher un evenement
+/*/ rechercher un evenement
 exports.searchEvents = async (req, res) => {
   try {
     const { titre } = req.query;
@@ -545,3 +675,4 @@ exports.searchEvents = async (req, res) => {
     });
   }
 };
+*/

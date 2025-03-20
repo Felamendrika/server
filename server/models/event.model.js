@@ -22,10 +22,23 @@ const eventSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    type: {
+      type: String,
+      enum: ["public", "private", "group"],
+      required: true,
+      default: "public",
+    },
     createur_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    group_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Group",
+      required: function () {
+        return this.type === "group"; // obligatoire si type = group
+      },
     },
   },
   { timestamps: true }

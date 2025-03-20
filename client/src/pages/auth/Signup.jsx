@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 
 import { useState } from "react"
 import { useForm } from "react-hook-form"
@@ -181,7 +182,7 @@ const Signup = () => {
                     </div>
                   </div>
 
-                {/* Avatar */}
+                {/* Avatar 
                 <div className="relative">
                   <label className="block text-sm mb-1  text-gray-500">Photo de Profil :</label>
                   <div className="flex items-center gap-4">
@@ -211,7 +212,7 @@ const Signup = () => {
                       <img src={selectedImage} alt="Preview" className="h-14 w-14 rounded-full object-cover"/>
                     )}
                   </div>
-                </div>
+                </div> */}
 
                   {/* Bouton et lien */}
                   <div className="text-center">

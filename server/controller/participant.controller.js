@@ -46,6 +46,13 @@ exports.addParticipant = async (req, res) => {
       });
     }
 
+    if (event.type === "public") {
+      return res.status(400).json({
+        message:
+          "L'evenement est public, vous ne pouvez pas ajouter des participants",
+      });
+    }
+
     // Filter les utilisateurs deja participants
     const existingParticipants = await Participant.find({ event_id });
     const existingUserIds = existingParticipants.map((p) =>
@@ -72,12 +79,19 @@ exports.addParticipant = async (req, res) => {
     }
 
     //await newParticipants.save();
-    const savedParticipants = await Participant.insertMany(newParticipants);
+    const savedParticipants = await Participant.insertMany(newParticipants, {
+      ordered: false,
+    });
     if (!savedParticipants) {
       return res.status(404).json({
         message: "Aucun participant ajouter",
       });
     }
+
+    /*
+    const participants = user_ids.map(user_id => ({ user_id, event_id }))
+    await Participant.insertMany(participants, { ordered: false });
+    */
 
     // if (io) {
     //   io.emit("participantAdded", {
@@ -126,7 +140,7 @@ exports.getEventsParticipant = async (req, res) => {
       event_id: eventId,
     })
       .populate("user_id", "nom")
-      .populate("event_id", "titre date_debut date_fin");
+      .populate("event_id", "titre date_debut date_fin type");
 
     if (!participants || participants.length === 0) {
       return (
@@ -265,7 +279,7 @@ exports.removeParticipant = async (req, res) => {
     }
 
     const deleteParticipant = await Participant.findOneAndDelete(
-      participant.id
+      participant?.id || { event_id: eventId, user_id: userId }
     );
     if (!deleteParticipant) {
       return res.status(404).json({
