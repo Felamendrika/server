@@ -101,6 +101,8 @@ const UserModal = ({ onClose }) => {
   const handleDelete = async () => {
       try {
         await deleteUser(token);
+        setUser(null)
+        // setToken(null)
         toast.success("Compte supprimé avec succès !");
         onClose(); 
         navigate('/signup', { replace: true });

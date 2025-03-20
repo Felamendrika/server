@@ -14,7 +14,7 @@ const GroupList = () => {
     const {
         groups,
         currentGroup,
-        // setCurrentGroup,
+        //setCurrentGroup,
         setCurrentGroupActive,
         fetchUserGroups,
         loading
@@ -22,7 +22,9 @@ const GroupList = () => {
 
     const {
         activeGroupConversation,
+        setCurrentConversation,
         fetchConversationMessages,
+        clearConversationState
     } = useMessage()
 
     const { socket } = useSocket()
@@ -31,39 +33,48 @@ const GroupList = () => {
     const [searchTerm, setSearchTerm] = useState("")
 
     useEffect(() => {
-        fetchUserGroups()
+        const fetchData = async () => {
+            try {
+                await fetchUserGroups()
+            } catch (error) {
+                console.error("Erreur lors du chargement des groupes :", error);
+            }
+        }
+        fetchData()
     }, [fetchUserGroups])
 
-    // useEffect(() => {
-    //     if (socket) {
-    //         // Rejoindre les rooms de tous les groupes
-    //         groups.forEach(group => {
-    //             socket.emit('joinGroup', group.group_id._id)
-    //         })
+    useEffect(() => {
+        if (socket) {
+            socket.on("newGroup", (data) => {
+                if (data.group && data.conversation) {
+                    fetchUserGroups(); // Rafraîchir la liste des groupes
+                }else {
+                    console.error("aucune creation par socket")
+                }
+            })
 
-    //         // Écouter les mises à jour des groupes
-    //         socket.on('groupModified', ({ groupId, updates }) => {
-    //             if (currentGroup?._id === groupId) {
-    //                 setCurrentGroup(prev => ({ ...prev, ...updates }))
-    //             }
-    //         })
+            socket.on("updateGroup", (data) => {
+                if (data.group) {
+                    fetchUserGroups
+                } else {
+                    console.error("aucun mise a jour pas socket")
+                }
+            })
 
-    //         socket.on('groupRemoved', ({ groupId }) => {
-    //             if (currentGroup?._id === groupId) {
-    //                 setCurrentGroup(null)
-    //             }
-    //             fetchUserGroups()
-    //         })
+            socket.on("removeGroup", (data) => {
+                if (data.group) {
+                    clearConversationState()
+                    fetchUserGroups()
+                }
+            })
 
-    //         return () => {
-    //             socket.off('groupModified')
-    //             socket.off('groupRemoved')
-    //             groups.forEach(group => {
-    //                 socket.emit('leaveGroup', group.group_id._id)
-    //             })
-    //         }
-    //     }
-    // }, [socket, groups, currentGroup, setCurrentGroup, fetchUserGroups])
+            return () => {
+                socket.off("newGroup")
+                socket.off("updateGroup")
+                socket.off("removeGroup")
+            }
+        }
+    }, [socket, clearConversationState, fetchUserGroups])
 
 
     const toggleGroupModal = () => {
@@ -77,9 +88,10 @@ const GroupList = () => {
     const handleSelectedGroup = async (group) => {
         try {
             setCurrentGroupActive(group.group_id)
-
+            setCurrentConversation(null);
 
             const conversation = await activeGroupConversation(group.group_id._id)
+            // setCurrentConversation(conversation)
             if (conversation && conversation._id) {
                 socket?.emit('joinConversation', conversation._id)
                 fetchConversationMessages(conversation._id)
@@ -102,6 +114,14 @@ const GroupList = () => {
                 <div className="text-center">Chargement des conversations...</div>;
             </div>
         )
+    }
+
+    if (groups.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full">
+                <p className="text-gray-500">Vous n&apos;avez pas encore de groupes. Créez-en un !</p>
+            </div>
+        );
     }
 
     return (

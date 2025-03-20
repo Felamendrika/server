@@ -1,5 +1,4 @@
 import CalendarDisplay from "../components/calendar/CalendarDisplay"
-
 const Calendrier = () => {
 
   return (

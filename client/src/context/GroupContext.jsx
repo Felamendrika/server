@@ -21,27 +21,37 @@ export const GroupProvider = ({ children }) => {
     const { clearConversationState } = useMessage();
     const { socket } = useSocket();
 
+    //nettoyage complet de l'etat de groupe
+    const clearGroupState = useCallback(() => {
+        setCurrentGroup(null)
+        setMembres([])
+        clearConversationState()
+    }, [clearConversationState]) 
+
+
     useEffect(() => {
         if(socket) {
             socket.on("newGroup", (data) => {
                 setGroups(prev => [...prev, data.group])
             })
 
-            socket.on("groupModified", (data) => {
+            socket.on("updateGroup", (data) => {
                 setGroups(prev => 
                     prev.map(group => 
-                        group._id === data.groupId ? { ...group, ...data.group } : group
+                        group._id === data.group._id ? { ...group, ...data.group } : group
                     )
                 )
-                if(currentGroup?._id === data.groupId) {
+                if(currentGroup?._id === data.group._id) {
                     setCurrentGroup(prev => ({ ...prev, ...data.group }))
+                    setMembres(data.membres)
                 }
             })
 
-            socket.on("groupRemoved", ({ groupId }) => {
+            socket.on("removeGroup", ({ groupId }) => {
                 setGroups(prev => prev.filter(group => group._id !== groupId))
                 if (currentGroup?._id === groupId) {
                     setCurrentGroup(null);
+                    setMembres([])
                 }
                 // toast.info("Le groupe a été supprimé")
             })
@@ -66,18 +76,17 @@ export const GroupProvider = ({ children }) => {
             })
 
             socket.on("membreLeftGroup", ({ userId}) => {
-                setMembres(prev => prev.fliter(m => m.user_id._id !== userId))
+                setMembres(prev => prev.filter(m => m.user_id._id !== userId))
             })
 
             return () => {
                 socket.off("newGroup");
-                socket.off("groupModified");
-                socket.off("groupRemoved");
-                socket.off("memberAdded");
-                socket.off("memberRoleChanged");
-                socket.off("memberDeleted");
-                socket.off("memberLeftGroup");
-                socket.off("groupsUpdated");
+                socket.off("updateGroup");
+                socket.off("removeGroup");
+                socket.off("membreAdded");
+                socket.off("membreRoleChanged");
+                socket.off("membreDeleted");
+                socket.off("membreLeftGroup");
             };
         }
     })
@@ -89,19 +98,26 @@ export const GroupProvider = ({ children }) => {
             const { data } = await getUsersGroups();
 
             console.log(data)
-            setGroups(data || []);
+            if (data.length === 0) {
+                setGroups([]); // Aucun groupe trouvé
+                clearGroupState()
+            } else {
+                setGroups(data || []);
+            }
         } catch (error) {
             console.error("Erreur lors du chargement des groupes:", error);
+            setGroups([]);
+            clearGroupState();
             // toast.error("Impossible de charger vos groupes");
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [clearGroupState]);
 
     // group active
     const setCurrentGroupActive = (group) => {
         setCurrentGroup(group)
-        console.log("GRoupe actif :", group)
+        console.log("Groupe actif :", group)
     }
 
 
@@ -152,7 +168,7 @@ export const GroupProvider = ({ children }) => {
             socket?.emit("groupDeleted", groupId);
             setGroups((prev) => prev.filter(group => group._id !== groupId));
             await fetchUserGroups()
-            toast.success("Groupe supprimé avec succès");
+            // toast.success("Groupe supprimé avec succès");
         } catch (error) {
             console.error("Erreur suppression groupe:", error);
             toast.error( error.message || "Erreur lors de la suppression du groupe");
@@ -168,6 +184,7 @@ export const GroupProvider = ({ children }) => {
             setMembres(response.data || []);
         } catch (error) {
             console.error("Erreur chargement membres:", error);
+            setMembres([]);
             toast.error("Impossible de charger les membres");
         } finally {
             setLoading(false);

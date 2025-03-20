@@ -207,7 +207,7 @@ const GroupDetail = () => {
             </div>
 
             <div className="flex-1 max-h-[300px] pb-2 overflow-y-auto custom-scrollbar"> 
-                {filteredMembres.length > 0 ? (
+                {filteredMembres?.length > 0 ? (
                     <div className="p-2">
                         {filteredMembres.map((membre, index) => (
                             <div
@@ -222,7 +222,7 @@ const GroupDetail = () => {
                                 <div className="ml-3 flex-1 w-full">
                                     <div className="flex justify-between items-center w-2/3">
                                         <span className="font-medium text-sm text-gray-600  truncate overflow-clip">{membre?.user_id?.pseudo}</span>
-                                        {/* <span className="text-xs text-gray-500">{user.time}</span> */}
+
                                     </div>
                                     <p className={`text-xs truncate ${membre?.role_id?.type === "admin" ? "text-blue-500" : "text-gray-500"}`}>{membre?.role_id?.type}</p>
                                 </div>
@@ -251,11 +251,11 @@ const GroupDetail = () => {
 
                 {/* AFFICHAGE DE LA LISTE DES FICHIER */}
             <div className="p-4 border-gray-200">
-                <h2  className="text-base font-semibold">Fichiers ({fichiers.length})</h2>
+                <h2  className="text-base font-semibold">Fichiers ({fichiers?.length})</h2>
             </div>
 
             <div className="flex-1 max-h-[300px] overflow-y-auto custom-scrollbar pb-3">
-                {fichiers.length > 0 ? (
+                {fichiers?.length > 0 ? (
                     <div className="pl-2 pr-2 pb-2">
                         {fichiers.map((fichier) => (
                             <div

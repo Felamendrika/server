@@ -70,10 +70,25 @@ export const SocketProvider = ({ children }) => {
           console.log("Conversation privée supprimée:", data);
       });
 
+      // GESTION DE GROUPE
+      newSocket.on("newGroup", (data) => {
+        if (data || data.group) {
+          console.log("nouveau groupe recu : ", data.group)
+        }
+      })
+
+      newSocket.on("updatedGroup", (data) => {
+        console.log("Groupe mis à jour:", data.group);
+      })
+
+      newSocket.on("removeGroup", (data) => {
+        console.log("Groupe supprimé:", data.groupId);
+      })
+
       // Événements pour les conversations de groupe
-      newSocket.on("groupConversationCreated", (data) => {
+      /*newSocket.on("groupConversationCreated", (data) => {
           console.log("Nouvelle conversation de groupe créée:", data);
-      });
+      })*/
 
       newSocket.on("groupConversationRemoved", (data) => {
           console.log("Conversation de groupe supprimée:", data);
@@ -92,17 +107,23 @@ export const SocketProvider = ({ children }) => {
       })
 
       // Ajout des événements du calendrier
-      newSocket.on("eventCreated", (data) => {
-        console.log("Nouvel événement créé:", data);
-      });
+    newSocket.on("newEvent", (data) => {
+        if (data && data.event) {
+            console.log("Nouvel événement reçu:", data.event);
+        }
+    });
 
-      newSocket.on("eventModified", (data) => {
-        console.log("Événement mis à jour:", data);
-      });
+    newSocket.on("eventModified", (data) => {
+        if (data && data.event) {
+            console.log("Événement modifié reçu:", data.event);
+        }
+    });
 
-      newSocket.on("eventRemoved", (data) => {
-        console.log("Événement supprimé:", data);
-      });
+    newSocket.on("eventRemoved", (data) => {
+        if (data && data.eventId) {
+            console.log("Événement supprimé reçu:", data.eventId);
+        }
+    });
 
       // newSocket.on("newMessageNotification", (data) => {
       //   setNotifications(prev => [data, ...prev]);
@@ -126,11 +147,14 @@ export const SocketProvider = ({ children }) => {
         newSocket.off("conversationUpdated");
         newSocket.off("conversationCreated");
         newSocket.off("conversationRemoved");
-        newSocket.off("groupConversationCreated");
+        // newSocket.off("groupConversationCreated");
         newSocket.off("groupConversationRemoved");
         newSocket.off("messageReceived");
         newSocket.off("messageModified");
         newSocket.off("messageDeleted");
+        newSocket.off("newGroup")
+        newSocket.off("updatedGroup");
+        newSocket.off("removeGroup");
         newSocket.off("newFile");
         newSocket.off("fileRemoved");
         newSocket.off("refreshConversationFiles");
@@ -193,8 +217,17 @@ export const SocketProvider = ({ children }) => {
     emitConversationDeleted: (data) => {
       emitEvent("conversationDeleted", data);
     },
-    emitNewGroupConversation: (data) => {
+    /*emitNewGroupConversation: (data) => {
       emitEvent("newGroupConversation", data);
+    },*/
+    emitGroupCreated: (data) => {
+      emitEvent("groupCreated", data)
+    }, 
+    emitGroupModified: (data) => {
+      emitEvent("groupModified", data)
+    },
+    emitGroupDeleted: (data) => {
+      emitEvent("groupDeleted", data)
     },
     emitGroupConversationDeleted: (data) => {
       emitEvent("groupConversationDeleted", data);

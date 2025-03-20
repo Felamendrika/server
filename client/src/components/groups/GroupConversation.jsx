@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 
 import {useEffect, useRef,useState} from 'react'
 import { FiPaperclip, FiTrash2, FiEdit ,FiSmile, FiMoreHorizontal, FiX } from 'react-icons/fi'
@@ -10,7 +11,7 @@ import {format} from 'date-fns'
 import ConfirmDeleteModal from "../common/ConfirmDeleteModal"
 import { useMessage } from '../../context/MessageContext'
 import { useGroup } from '../../context/GroupContext'
-// import { useSocket } from "../../context/SocketContext"
+import { useSocket } from "../../context/SocketContext"
 
 import GroupModal from '../modal/GroupModal'
 
@@ -20,6 +21,7 @@ const GroupConversation = () => {
       fetchConversationMessages,
       fetchFilesByConversations,
       currentConversation,
+      clearConversationState,
       createMessage,
       updateMessage,
       deleteMessage,
@@ -35,7 +37,7 @@ const GroupConversation = () => {
       deleteGroup,
     } = useGroup()
 
-    // const { socket } = useSocket()
+    const { socket } = useSocket()
 
     const [messageContent, setMessageContent] = useState([])
     const [editingMessageId, setEditingMessageId] = useState(null)
@@ -60,6 +62,49 @@ const GroupConversation = () => {
         fetchConversationMessages(currentConversation._id)
       }
     }, [fetchConversationMessages, currentConversation])
+
+    useEffect(() => {
+      if (!currentGroup) {
+          setCurrentConversation(null); // Réinitialiser si aucun groupe n'est sélectionné
+      }
+  }, [currentGroup, setCurrentConversation]);
+
+    useEffect(() => {
+      if (socket && currentGroup) {
+        /*socket.on("updateGroup", (data) => {
+          setCurrentGroup(data.group)
+        }) */
+        
+        const handleGroupUpdated = (data) => {
+          if (data.group._id === currentGroup._id) {
+            setCurrentGroup(data.group)
+          }
+        }
+
+        const handleGroupRemoved = ({ groupId }) => {
+          if ( groupId === currentGroup._id) {
+            setCurrentGroup(null)
+            setCurrentConversation(null)
+            clearConversationState()
+          }
+        }
+
+        /*const handleMessageModified = (data) => {
+          if (currentConversation._id === data.conversation._id) {
+            fetchConversationMessages(currentConversation._id)
+          }
+        }
+
+        const handleMessageDeleted = (data) => {
+          if (currentConversation._id === data.conversation._id) {
+            fetchConversationMessages(currentConversation._id)
+          }
+        } */
+
+        socket.on("updateGroup", handleGroupUpdated)
+        socket.on("removeGroup", handleGroupRemoved)
+      }
+    }, [socket, currentGroup, setCurrentGroup, setCurrentConversation, clearConversationState])
 
 
   const scrollToBottom = () => {
@@ -198,6 +243,14 @@ const GroupConversation = () => {
     if (loading) {
       return <div className="text-center">Chargement des conversations...</div>;
     }
+
+    if (!currentGroup || !currentConversation) {
+      return (
+          <div className="text-center">
+              <p>Aucune conversation ou groupe sélectionné.</p>
+          </div>
+      );
+  }
   
     if (!currentConversation) {
       return <div className="h-full min-w-[70%] flex flex-col bg-gray-50 border-black rounded-lg pb-4 shadow-sm overflow-hidden text-center text-gray-500 justify-center">Sélectionnez une conversation pour afficher les messages.</div>;

@@ -47,7 +47,7 @@ const EventForm = ({ onClose, selectedEvent }) => {
         date_fin: selectedEvent.date_fin
           ? new Date(selectedEvent.date_fin).toISOString().slice(0, 16)
           : "",
-        createur_id: selectedEvent.createur_id || "",
+        createur_id: selectedEvent?.createur_id || "",
       })
     } else {
       setEventData({
@@ -139,11 +139,11 @@ const EventForm = ({ onClose, selectedEvent }) => {
             {selectedEvent ? 'Modifier l’événement' : 'Créer un événement'}
           </h2>
 
-          {selectedEvent && selectedEvent?.createur_id && (
+          {selectedEvent && selectedEvent.createur_id && (
             <div className="flex items-center gap-3 mb-4">
               <p className="block font-medium">Créateur de l’événement: </p>
             <img
-              src={selectedEvent.createur_id.avatar}
+              src={selectedEvent.createur_id?.avatar}
               alt={`${selectedEvent.createur_id.nom}`}
               className="w-12 h-12 rounded-full"
             />

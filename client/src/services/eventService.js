@@ -6,7 +6,7 @@ export const createEvent = async (eventData) => {
     const response = await api.post("/events/create", eventData);
 
     console.log("event creer :", response.data);
-    console.log(response.data.event);
+    // console.log(response.data.event);
     return response.data;
   } catch (error) {
     console.error("Erreur dans createEvent :", error.message);

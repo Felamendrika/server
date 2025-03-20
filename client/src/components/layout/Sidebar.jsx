@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import {useMessage} from "../../context/MessageContext"
+import { useEvent } from "../../context/EventContext"
+import { useGroup } from '../../context/GroupContext';
 // import { useNotification } from "../../context/NotifContext";
 
 import { TfiCommentAlt } from "react-icons/tfi";
@@ -17,7 +19,9 @@ import Logo from "../../assets/Region.png"
 
 const Sidebar = () => {
     const { logout } = useAuth()
-    const { clearConversationState, conversations ,fetchPrivateConversations } = useMessage()
+    const { clearConversationState, fetchPrivateConversations } = useMessage()
+    const { fetchEvents } = useEvent()
+    const { fetchUserGroups, setCurrentGroup } = useGroup()
     // const { unreadCount } = useNotification();
     const [activePage, setActivePage] = useState("messages");
     // const navigate = useNavigate();
@@ -25,30 +29,52 @@ const Sidebar = () => {
 
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
+    const handleNavigation = (pageName) => {
+        setActivePage(pageName)
+        clearConversationState()
+
+        if (pageName !== "groups") {
+            setCurrentGroup(null) // Réinitialiser le groupe actif
+        }
+
+        switch (pageName) {
+            case "messages" : 
+                fetchPrivateConversations();
+                break
+            case "groups" :
+                fetchUserGroups()
+                break
+            case "calendar" :
+                fetchEvents()
+                break
+        }
+
+        /*if (pageName !== "messages") {
+            clearConversationState()
+        } */
+    }
+
     useEffect(() => {
         const currentPath = location.pathname;
         if (currentPath === "/dashboard" || currentPath === "/dashboard/messages") {
             setActivePage("messages");
-            if (!conversations.length) {
-                fetchPrivateConversations();
-            }
+            fetchPrivateConversations();
+        } else if (currentPath === "/dashboard/groups") {
+            setActivePage("groups")
+                fetchUserGroups()
+        } else if (currentPath === "/dashboard/calendrier") {
+            setActivePage("calendar");
+                fetchEvents()
         }
-    }, [location, fetchPrivateConversations, conversations]);
-
-    const handleNavigation = (pageName) => {
-        setActivePage(pageName)
-        if (pageName !== "messages") {
-            clearConversationState()
-        }
-    }
+    }, [location, fetchPrivateConversations, fetchEvents,fetchUserGroups]);
     const handleLogout = () => {
         logout()
     }
 
     const menuItems = [
-        { name: "Messages", icon: <TfiCommentAlt/>, path: "/dashboard/messages", id: "messages",onClick: handleNavigation },
-        { name: "Groupes", icon: <PiUsers/>, path: "/dashboard/groups", id:"groups" ,onClick: handleNavigation },
-        { name: "Calendrier Partagé", icon: <BsCalendar2Event/>, path: "/dashboard/calendrier", id:"calendar", onClick: handleNavigation },
+        { name: "Messages", icon: <TfiCommentAlt/>, path: "/dashboard/messages", id: "messages"}, //,onClick: handleNavigation 
+        { name: "Groupes", icon: <PiUsers/>, path: "/dashboard/groups", id:"groups" },
+        { name: "Calendrier Partagé", icon: <BsCalendar2Event/>, path: "/dashboard/calendrier", id:"calendar" },
     ]
     return (
 
@@ -63,16 +89,16 @@ const Sidebar = () => {
             {/* Menu items */}
             <div className="flex flex-col items-center justify-center p-4 space-y-8">
                 <div className="flex flex-col space-y-8 flex-grow">
-                    {menuItems.map((item, index) => (
+                    {menuItems.map((item) => (
                     <NavLink
                         to={item.path}
-                        key={index}
+                        key={item.id}
                         onClick={() => handleNavigation(item.id)}
                         // onClick={item.onClick}
                         aria-label={item.name}
                         className={({isActive}) => 
                             `flex flex-col items-center w-full text-black p-2 rounded-lg transition ${
-                                isActive || (item.id === "messages" && activePage === "messages")
+                                isActive || (item.id === activePage)
                                     ? "bg-white shadow-md font-bold" 
                                     : "hover:bg-white shadow-md"
                             }`

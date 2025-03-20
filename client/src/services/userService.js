@@ -56,7 +56,8 @@ export const deleteUser = async (token) => {
     };
 
     const response = await api.delete("/users/delete", config);
-    removeToken(); // Supprime le token de l'utilisateur
+    if (token) removeToken(); // Supprime le token de l'utilisateur
+    // console.log("Token apres suppression compte :", token);
     return response.data;
   } catch (error) {
     throw (

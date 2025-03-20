@@ -458,7 +458,6 @@ exports.deleteMessage = async (req, res) => {
         lastMessage: {
           _id: message._id,
           contenu: "Message supprimé",
-          isDeleted: true,
           date_envoi: message.date_envoi,
           user_id: message.user_id,
         },

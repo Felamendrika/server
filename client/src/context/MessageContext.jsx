@@ -101,14 +101,15 @@ export const MessageProvider = ({ children }) => {
 
                         addMessageWithoutDuplication(data)
 
-                        if (data.message.fichier) {
+                        if (data.message?.fichier) {
                             setFichiers(prev => {
-                                const fichierExists = prev.some( f => f._id === data.fichier._id)
+                                const prevFiles = prev || []
+                                const fichierExists = prevFiles.some( f => f._id === data.fichier?._id)
 
                                 if (!fichierExists) {
                                     return [...prev, data.fichier]
                                 }
-                                return prev
+                                return prevFiles
                             })
                         }
                 }
@@ -343,7 +344,7 @@ export const MessageProvider = ({ children }) => {
                 clearConversationState();
             }
             setMessages([])
-            toast.success("Conversation supprimé avec succes")
+            toast.success("Suppression effectuer avec succes")
 
         } catch (error) {
             console.error("Erreur lors de la suppression de le conversation: ", error)

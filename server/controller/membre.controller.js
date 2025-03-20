@@ -138,15 +138,25 @@ exports.addMembre = async (req, res) => {
 
     const io = getIO();
     // emission d'un evenement socket.io
-    // if (io) {
-    //   io.to(`group_${group_id}`).emit("membreAdded", fullMembre);
-    // } else {
-    //   console.error("Socket.IO non initialisé");
-    //   /*return res.status(500).json({
-    //     message:
-    //       "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
-    //   }); */
-    // }
+    if (io) {
+      io.to(`group_${group_id}`).emit("membreAdded", {
+        membre: fullMembre,
+        group: group,
+        //groupId: group_id,
+      });
+
+      io.to(`group_${user_id}`).emit("joinedGroup", {
+        group: group,
+        // conversation: conversation,
+        conversation: group_id.conversation,
+      });
+    } else {
+      console.error("Socket.IO non initialisé");
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      });
+    }
 
     res.status(201).json({
       success: true,
@@ -221,7 +231,7 @@ exports.updateMembreRole = async (req, res) => {
     // metre a jour le role du membre
     membre.role_id = role._id;
 
-    await membre.save();
+    const updatedmembre = await membre.save();
 
     const io = getIO();
     //emission d'un evenement socket.io

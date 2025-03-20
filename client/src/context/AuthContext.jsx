@@ -74,8 +74,10 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true)
 
       // Initialiser le socket immédiatement avec le nouveau token
-      socket?.emit("userConnected");
-      socket?.emit("getOnlineUsers");
+      if (socket) {
+        socket.emit("userConnected");
+        socket.emit("getOnlineUsers");
+      }
 
       toast.success("Connexion reussie ! Bienvenue sur la plateforme");
       navigate("/dashboard")

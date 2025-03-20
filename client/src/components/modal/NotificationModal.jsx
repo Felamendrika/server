@@ -34,17 +34,15 @@ const NotificationModal = ({onClose}) => {
           <h2 className="text-xl font-semibold mb-4">Notifications</h2>
           <div className="flex justify-between items-center mb-4">
 
-            {notifications.length > 0 && (
             <button
                 onClick={clearNotifications}
                 className="text-sm text-blue-500 underline mb-2"
               >
                 Marquer tout comme lu
               </button>
-            )}
           </div>
 
-              {notifications.length > 0 ? (
+              {notifications ? (
                 <ul className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar"> 
                   {notifications.map((notif, index) => (
                     <li

@@ -173,7 +173,7 @@ const MediaList = () => {
 
                     <BsFileText size={20} className='text-gray-500 mr-1'/>
                     {/* User Info */}
-                      <div className="ml-3 flex-1 w-24 truncate">
+                      <div className="ml-3 flex-1 min-w-24 w-28 truncate">
                           <span className="font-medium text-sm text-gray-600">{fichier.nom}</span>
                           <p className="text-xs text-gray-500 truncate">{fichier.taille}</p>
                       </div>
@@ -181,7 +181,7 @@ const MediaList = () => {
 
                   <button
                     onClick={() => handleDeleteFile(fichier._id)}
-                    className="ml-2 hover:text-red-500 hover:border-red-500"
+                    className="ml-3 hover:text-red-500 hover:border-red-500"
                   >
                     <FiTrash size={15} />
                   </button>

@@ -98,7 +98,7 @@ const initializeSocket = (server) => {
     //gestion de message
     socket.on("newMessage", (data) => {
       const { conversation_id, message, receiverId } = data;
-      const roomName = `conversation_${conversationId}`;
+      const roomName = `conversation_${conversation_id}`;
 
       //Emission aux utilisateurs dans la conversation
       io.to(roomName).emit("messageReceived", {
@@ -172,10 +172,41 @@ const initializeSocket = (server) => {
       });
     });
 
-    socket.on("newGroupConversation", (data) => {
+    //GESTION DE GROUPE
+    socket.on("groupCreated", (data) => {
+      const { group, conversation, createur_id } = data;
+
+      io.emit("newGroup", {
+        group: group,
+        conversation,
+        createur_id: createur_id,
+      });
+
+      console.log("Groupe creer en direct :", group);
+    });
+
+    socket.on("groupModified", (data) => {
+      const { group, membres } = data;
+      io.to(`group_${group_id}`).emit("updateGroup", {
+        group,
+        membres,
+      });
+      console.log("Groupe modifier en direct :", group);
+    });
+
+    socket.on("groupDeleted", (data) => {
+      const { groupId, conversationId } = data;
+      io.emit("removeGroup", {
+        groupId,
+        conversationId,
+      });
+      console.log("Groupe supprimer en direct :", groupId);
+    });
+
+    /*socket.on("newGroupConversation", (data) => {
       const { conversation, groupId } = data;
       io.to(`group_${groupId}`).emit("groupConversationCreated", conversation);
-    });
+    }); */
 
     socket.on("groupConversationDeleted", ({ conversationId, groupId }) => {
       io.to(`group_${groupId}`).emit("groupConversationRemoved", {
@@ -222,26 +253,34 @@ const initializeSocket = (server) => {
     });
 
     // GESTION DE FICHIERS
-    socket.on("eventCreated", (eventData) => {
-      io.emit("newEvent", {
-        event: eventData.event,
-      });
-      console.log(`Nouvel événement créé:`, eventData.event);
+    socket.on("eventCreated", (data) => {
+      if (data && data.event) {
+        io.emit("newEvent", { event: data.event });
+        console.log("Nouvel événement émis:", data.event);
+      }
     });
 
-    socket.on("eventUpdated", (eventData) => {
-      io.emit("eventModified", {
-        event: eventData.event,
-        eventId: eventData.eventId,
-      });
-      console.log(`Événement mis à jour:`, eventData.event);
+    socket.on("eventUpdated", (data) => {
+      if (data && data.event) {
+        io.emit("eventModified", { event: data.event });
+        console.log("Événement mis à jour:", data.event);
+      }
+      // io.emit("eventModified", {
+      //   event: eventData.event,
+      //   eventId: eventData.eventId,
+      // });
+      // console.log(`Événement mis à jour:`, eventData.event);
     });
 
-    socket.on("eventDeleted", ({ eventId }) => {
-      io.emit("eventRemoved", {
-        eventId,
-      });
-      console.log(`Événement supprimé:`, eventId);
+    socket.on("eventDeleted", (data) => {
+      if (data && data.eventId) {
+        io.emit("eventRemoved", { eventId: data.eventId });
+        console.log("Événement supprimé:", data.eventId);
+      }
+      // io.emit("eventRemoved", {
+      //   eventId,
+      // });
+      // console.log(`Événement supprimé:`, eventId);
     });
 
     // GESTION DE DECONNEXION

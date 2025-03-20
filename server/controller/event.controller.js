@@ -75,26 +75,38 @@ exports.createEvent = async (req, res) => {
     }
 
     const newEvent = await event.save();
+    await newEvent.populate([
+      { path: "createur_id", select: " _id nom prenom pseudo avatar" },
+    ]);
 
     // Populate after saving
 
     // diffusion via socket
     const io = getIO();
     if (io) {
-      const populatedEvent = await Event.findById(newEvent._id).populate(
-        "createur_id",
-        "nom prenom pseudo avatar"
-      );
-      io.emit("eventCreated", {
-        event: populatedEvent,
-        // message: `Nouvel événement créé: ${newEvent.titre}`,
+      // const populatedEvent = await Event.findById(newEvent._id).populate(
+      //   "createur_id",
+      //   "nom prenom pseudo avatar"
+      // );
+      const eventPayload = {
+        ...newEvent.toObject(),
+        createur_id: {
+          _id: newEvent.createur_id._id,
+          nom: newEvent.createur_id.nom,
+          prenom: newEvent.createur_id.prenom,
+          pseudo: newEvent.createur_id.pseudo,
+          avatar: newEvent.createur_id.avatar,
+        },
+      };
+      io.emit("newEvent", {
+        event: eventPayload,
       });
     } else {
       console.error("Socket.IO non initialisé");
-      // return res.status(500).json({
-      //   message:
-      //     "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
-      // });
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      });
     }
 
     res.status(201).json({
@@ -362,7 +374,7 @@ exports.updateEvent = async (req, res) => {
       eventId,
       { titre, description, date_debut, date_fin },
       { new: true, runValidators: true } //active les validation de modele
-    );
+    ).populate("createur_id", "nom prenom pseudo avatar");
 
     if (!updatedEvent) {
       return res.status(404).json({
@@ -373,22 +385,32 @@ exports.updateEvent = async (req, res) => {
     // socket.io
     const io = getIO();
     if (io) {
-      const populatedEvent = await Event.findById(updatedEvent._id).populate(
-        "createur_id",
-        "nom prenom pseudo avatar"
-      );
+      // const populatedEvent = await Event.findById(updatedEvent._id).populate(
+      //   "createur_id",
+      //   "nom prenom pseudo avatar"
+      // );
 
-      io.emit("eventUpdated", {
-        event: populatedEvent,
-        eventId: eventId, //updatedEvent._id
-        message: `L'événement "${updatedEvent.titre}" a été mis à jour`,
+      const eventPayload = {
+        ...updatedEvent.toObject(),
+        createur_id: {
+          _id: updatedEvent.createur_id._id,
+          nom: updatedEvent.createur_id.nom,
+          prenom: updatedEvent.createur_id.prenom,
+          pseudo: updatedEvent.createur_id.pseudo,
+          avatar: updatedEvent.createur_id.avatar,
+        },
+      };
+
+      io.emit("eventModified", {
+        event: eventPayload,
       });
+      // eventId: eventId, //updatedEvent._id
     } else {
       console.error("Socket.IO non initialisé");
-      // return res.status(500).json({
-      //   message:
-      //     "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
-      // });
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      });
     }
 
     res.status(200).json({
@@ -471,7 +493,7 @@ exports.deleteEvent = async (req, res) => {
     // socket
     const io = getIO();
     if (io) {
-      io.emit("eventDeleted", {
+      io.emit("eventRemoved", {
         eventId: eventId,
         message: "Événement supprimé",
       });

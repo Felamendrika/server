@@ -257,8 +257,8 @@ const ConversationDisplay = () => {
           <div className='flex items-center gap-3'>
             <img src={ currentConversation.otherParticipant?.avatar || userAvatar} alt="" className='w-12 h-12 justify-center rounded-full object-cover' />
             <div>
-              <h3 className="font-semibold text-lg">{currentConversation.otherParticipant.pseudo}</h3>
-              <p className="text-gray-500 text-sm">{currentConversation.otherParticipant.nom} {" "} {currentConversation.otherParticipant.prenom} </p>
+              <h3 className="font-semibold text-lg">{currentConversation.otherParticipant?.pseudo}</h3>
+              <p className="text-gray-500 text-sm">{currentConversation.otherParticipant?.nom} {" "} {currentConversation.otherParticipant?.prenom} </p>
             </div>
           </div>
 
