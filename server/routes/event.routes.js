@@ -25,6 +25,12 @@ router.get("/event/past", authMiddleware, eventController.getPastEvents);
 // route pour recuperer les evenement creer par un utilisateur connecter
 router.get("/event/user", authMiddleware, eventController.getUserEvents);
 
+// route pour recuperer les events d'un groupe specifique
+router.get("/group/group_id", authMiddleware, eventController.getGroupEvents);
+
+// route pour recuperer les events filtrer par type
+router.get("/event/filter", authMiddleware, eventController.getFilteredEvents);
+
 // route pour MAJ event
 router.put("/update/:eventId", authMiddleware, eventController.updateEvent);
 
@@ -32,6 +38,6 @@ router.put("/update/:eventId", authMiddleware, eventController.updateEvent);
 router.delete("/delete/:eventId", authMiddleware, eventController.deleteEvent);
 
 // route pour la recherche d'evenement
-router.get("/searchEvent", authMiddleware, eventController.searchEvents);
+//router.get("/searchEvent", authMiddleware, eventController.searchEvents);
 
 module.exports = router;

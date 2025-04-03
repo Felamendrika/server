@@ -27,6 +27,12 @@ exports.addParticipant = async (req, res) => {
       });
     }
 
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      return res.status(400).json({
+        message: "La liste des utilisateurs doit être un tableau",
+      });
+    }
+
     if (!user_ids.every((id) => isValidObjectId(id))) {
       return res.status(400).json({
         message: "ID des utilisateurs invalides",
@@ -39,7 +45,7 @@ exports.addParticipant = async (req, res) => {
     }
 
     // verification si l'evenement existe
-    const event = await Event.findById(event_id);
+    const event = await Event.findById(event_id).populate("_id titre type");
     if (!event) {
       return res.status(404).json({
         message: "Evenement introuvable",
@@ -66,11 +72,12 @@ exports.addParticipant = async (req, res) => {
       });
     }
 
-    // creer de nouveaux participants
+    // creer de nouveaux participants (tableau d'objet avec user_id et event_id)
     //const newParticipant = new Participant({ user_ids, event_id });
-    const newParticipants = newUserIds.map((user_id) => {
-      return user_id, event_id; // s'assurer que l'objet et bien retourne
-    });
+    const newParticipants = newUserIds.map((user_id) => ({
+      user_id,
+      event_id, // s'assurer que l'objet et bien retourne
+    }));
 
     if (newParticipants.length === 0 || !newParticipants) {
       return res.status(404).json({
@@ -78,15 +85,39 @@ exports.addParticipant = async (req, res) => {
       });
     }
 
-    //await newParticipants.save();
-    const savedParticipants = await Participant.insertMany(newParticipants, {
-      ordered: false,
-    });
-    if (!savedParticipants) {
-      return res.status(404).json({
-        message: "Aucun participant ajouter",
+    // rahe tsy mety ito de asorona try/catch , reste declaration savedParticipants+ if (!savedParticipants) {
+    try {
+      const savedParticipants = await Participant.insertMany(newParticipants, {
+        ordered: false,
+        rawResult: true,
+      }).catch((error) => {
+        // si certains doc en été insérés avant l'erreur de duplication
+        if (error.insertedDocs && error.insertedDocs.length > 0) {
+          return error.insertedDocs;
+        }
+        throw error; // relancer d'autre erreur
       });
+
+      console.log(
+        `${savedParticipants.insertCount} participants ajoutés sur ${newParticipants.length}`
+      );
+      if (!savedParticipants) {
+        return res.status(404).json({
+          message: "Aucun participant ajouter",
+        });
+      }
+    } catch (error) {
+      if (error.writeErrors) {
+        console.error(
+          `${error.insertedDocs.length} participants ajoutés, ${error.writeErrors.length} erreurs`
+        );
+      }
     }
+    //await newParticipants.save();
+
+    const populatedParticipants = await Participant.find({
+      _id: { $in: savedParticipants.map((p) => p._id) },
+    }).populate("user_id", "pseudo avatar");
 
     /*
     const participants = user_ids.map(user_id => ({ user_id, event_id }))
@@ -106,7 +137,7 @@ exports.addParticipant = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Participants ajouter avec succes",
-      data: savedParticipants,
+      data: populatedParticipants,
     });
   } catch (error) {
     res.status(400).json({
@@ -136,29 +167,42 @@ exports.getEventsParticipant = async (req, res) => {
       });
     }
 
+    // const participants = await Participant.find({
+    //   event_id: eventId,
+    // }).populate("user_id", "nom pseudo avatar");
+
     const participants = await Participant.find({
       event_id: eventId,
     })
-      .populate("user_id", "nom")
-      .populate("event_id", "titre date_debut date_fin type");
+      .select("user_id")
+      .populate("user_id", "nom pseudo avatar")
+      .lean();
 
     if (!participants || participants.length === 0) {
-      return (
-        res.status(404),
-        json({
-          message: `Aucun participant trouvé pour l'evenement ${event.titre}`,
-        })
-      );
+      return res.status(404).json({
+        message: `Aucun participant trouvé pour l'evenement ${event.titre}`,
+      });
     }
+
+    // extraire les informations utilisateur pour une reponse plus propre
+    const formattedParticipants = participants.map((participant) => ({
+      _id: participant._id,
+      user: participant.user_id,
+    }));
 
     res.status(200).json({
       success: true,
       message: `Voici les participants de l'evenement "${event.titre}"`,
       event: {
+        _id: event._id,
         titre: event.titre,
+        type: event.type,
+        description: event.description,
         date_debut: event.date_debut,
         date_fin: event.date_fin,
       },
+      count: participants.length,
+      Participants: formattedParticipants,
       data: participants,
     });
   } catch (error) {
@@ -245,7 +289,13 @@ exports.getAllParticipants = async (req, res) => {
 exports.removeParticipant = async (req, res) => {
   try {
     const { eventId, userId } = req.params;
-    // const { userId } = req.body;
+    const currentUser = req.user || req.user?._id || req.user?.id;
+
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Utilisateur non authentifié",
+      });
+    }
 
     if (!isValidObjectId(eventId)) {
       return res.status(400).json({
@@ -266,11 +316,11 @@ exports.removeParticipant = async (req, res) => {
       });
     }
 
-    // verification si l'utilisteur est bien un participant
+    // verification si l'utilisateur est bien un participant
     const participant = await Participant.findOne({
       event_id: eventId,
       user_id: userId,
-    });
+    }).populate("user_id", "nom pseudo email");
 
     if (!participant) {
       return res.status(404).json({
@@ -278,9 +328,21 @@ exports.removeParticipant = async (req, res) => {
       });
     }
 
-    const deleteParticipant = await Participant.findOneAndDelete(
-      participant?.id || { event_id: eventId, user_id: userId }
-    );
+    // verification authorization que seul le createur peut supprimer un participant
+    if (
+      currentUser.toString() !== event.createur_id.toString() &&
+      currentUser.toString() !== userId.toString()
+    ) {
+      return res.status(403).json({
+        message: "Vous n'êtes pas autorisé à supprimer ce participant",
+      });
+    }
+
+    const deleteParticipant = await Participant.findOneAndDelete({
+      event_id: eventId,
+      user_id: userId,
+    });
+
     if (!deleteParticipant) {
       return res.status(404).json({
         message: "Participant non supprimer",
@@ -292,6 +354,11 @@ exports.removeParticipant = async (req, res) => {
     //   io.emit("participantRemoved", {
     //     eventId,
     //     userId,
+    //     participantInfo: {
+    //        nom: participant.user_id.nom,
+    //        pseudo: participant.user_id.pseudo,
+    //        avatar: participant.user_id.avatar,
+    //    }
     //   });
     // } else {
     //   console.error("Socket.IO non initialisé");
@@ -299,7 +366,7 @@ exports.removeParticipant = async (req, res) => {
     // }
 
     res.status(200).json({
-      succes: true,
+      success: true,
       message: "Participant supprimé avec succès.",
     });
   } catch (error) {

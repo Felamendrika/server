@@ -2,6 +2,7 @@ const Event = require("../models/event.model");
 const User = require("../models/user.model");
 const Participant = require("../models/participant.model");
 const Group = require("../models/group.model");
+const Membre = require("../models/membre.model");
 
 const { isValidObjectId } = require("mongoose");
 const { getIO } = require("../socket/socket");
@@ -145,6 +146,277 @@ exports.createEvent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la création de l'événement",
+      error: error.message,
+    });
+  }
+};
+
+// creation d'evenement avec participant en une seule transaction si type == private
+exports.createEventWithParticipants = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const {
+      titre,
+      description,
+      date_debut,
+      date_fin,
+      type,
+      group_id,
+      user_ids,
+    } = req.body;
+    const createur_id = req.user?._id || req.user?.id;
+
+    if (!req.user || !req.user._id || !req.user.id) {
+      return res.status(401).json({
+        message: "Utilisateur non authentifier",
+      });
+    }
+
+    if (!createur_id) {
+      return res.status(401).json({
+        message: "ID utilisateur connecter non recuperer",
+      });
+    }
+    if (!titre || !description) {
+      return res.status(404).json({
+        message: "Le titre et la description sont obligatoire",
+      });
+    }
+    if (!date_debut || !date_fin) {
+      return res.status(404).json({
+        message: "Les dates sont requis pour l'évènement ",
+      });
+    }
+
+    // verification validiter du type
+    if (!["public", "private", "group"].includes(type)) {
+      return res.status(400).json({
+        message: "Type d'événement invalide",
+      });
+    }
+
+    // verification pour les evenement de groupe
+    if (type === "group") {
+      if (!group_id) {
+        return res.status(400).json({
+          message: "ID du groupe est obligatoire pour un événement de groupe",
+        });
+      }
+
+      const group = await Group.findById(group_id);
+      if (!group) {
+        return res.status(404).json({
+          message: "Groupe non trouvé",
+        });
+      }
+
+      //verifier si l'utilisteur est membre du groupe
+      const isMembre = await Membre.findOne({
+        group_id: group_id,
+        user_id: createur_id,
+      });
+
+      if (!isMembre) {
+        return res.status(403).json({
+          message: "Vous n'êtes pas membre de ce groupe",
+        });
+      }
+    }
+
+    // Vérification de l'existence de l'utilisateur créateur
+    const createur = await User.findById(createur_id);
+    if (!createur) {
+      return res.status(404).json({
+        message: "L'utilisateur créateur n'existe pas",
+      });
+    }
+
+    // verification des dates
+    if (new Date(date_debut) >= new date(date_fin)) {
+      return res.status(400).json({
+        message: "La date de début ne peut pas être après la date de fin",
+      });
+    }
+
+    //verification de l'unicité du titre
+    const existingEvent = await Event.findOne({ titre });
+    if (existingEvent) {
+      return res.status(400).json({
+        message: "Un événement avec le même titre existe déjà",
+      });
+    }
+
+    // creation de l'evenement
+    const createdEvent = new Event({
+      titre,
+      description,
+      date_debut,
+      date_fin,
+      createur_id,
+      type,
+      group_id: type === "group" ? group_id : null,
+    });
+
+    //sauvergarde de l'event
+    const savedEvent = await createdEvent.save({ session });
+    if (!savedEvent) {
+      return res.status(404).json({
+        message: "Evenement non creer",
+      });
+    }
+
+    //si le type est private + participant
+    let eventParticipants = [];
+    if (type === "private") {
+      // s'assurer que le createur est participant
+      let participantIds = Array.isArray(user_ids) ? [...user_ids] : [];
+
+      //ajouter le createur si il n'es pas dans a liste
+      if (
+        !participantIds.some((id) => id.toString() === createur_id.toString())
+      ) {
+        participantIds.push(createur_id);
+      }
+      if (participantIds.length > 0) {
+        // Validation des IDs utilisateurs
+        if (!participantIds.every((id) => mongoose.isValidObjectId(id))) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            message: "ID des utilisateurs invalides",
+          });
+        }
+      }
+
+      // dans le cas d'un event PRIVATE avec ajout participant
+      /*if (type === "private" && Array.isArray(user_ids) && user_ids.length > 0) {
+      // validation des IDs des utilisateurs
+      if (!user_ids.every((id) => mongoose.isValidObjectId(id))) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          message: "ID des utilisateurs invalides ",
+        });
+      } */
+
+      // creation des objets participants
+      const participants = participantIds.map((user_id) => ({
+        //user_ids solony participantIds
+        user_id,
+        event_id: savedEvent._id,
+      }));
+
+      //ajout des participants dans la transaction
+      await Participant.insertMany(participants, {
+        session,
+        ordered: false, // permet de continuer meme si certains insert echoue
+      });
+
+      //recup des participants pour la reponse
+      eventParticipants = await Participant.find({
+        event_id: savedEvent._id,
+      }).populate("user_id", "_id nom pseudo avatar");
+    }
+
+    // validation de la transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    //recup de l'event avec les relations peuplees
+    const populatedEvent = await Event.findById(savedEvent._id)
+      .populate("createur_id", "_id nom pseudo avatar")
+      .populate("group_id", "nom");
+
+    // Préparation des données supplémentaires selon le type
+    let additionalData = {};
+
+    if (type === "private") {
+      additionalData.participants = eventParticipants;
+    } else if (type === "group") {
+      // Récupérer le nombre de membres du groupe pour information
+      const memberCount = await Membre.countDocuments({ group_id });
+      additionalData.group = {
+        _id: populatedEvent.group_id._id,
+        nom: populatedEvent.group_id.nom,
+        memberCount,
+      };
+    }
+
+    /*
+        // Notification via Socket.IO
+    const io = getIO();
+    if (io) {
+      const eventPayload = {
+        ...populatedEvent.toObject(),
+        createur_id: {
+          _id: populatedEvent.createur_id._id,
+          nom: populatedEvent.createur_id.nom,
+          prenom: populatedEvent.createur_id.prenom,
+          pseudo: populatedEvent.createur_id.pseudo,
+          avatar: populatedEvent.createur_id.avatar,
+        },
+      };
+      io.emit("newEvent", {
+        event: eventPayload,
+      });
+    } else {
+      console.error("Socket.IO non initialisé");
+    }
+    */
+
+    /*
+          const io = getIO();
+    if (io) {
+      const eventPayload = {
+        ...populatedEvent.toObject(),
+        type,
+        additionalData
+      };
+      
+      io.emit("newEvent", { event: eventPayload });
+      
+      // Si c'est un événement de groupe, notifier les membres du groupe
+      if (type === "group") {
+        const groupMembers = await Membre.find({ group_id });
+        groupMembers.forEach(member => {
+          io.to(`user_${member.user_id}`).emit("newGroupEvent", {
+            event: eventPayload,
+            groupId: group_id
+          });
+        });
+      }
+    } else {
+      console.error("Socket.IO non initialisé");
+    }
+    */
+    res.status(201).json({
+      success: true,
+      message:
+        // "Evenement ${type}  creer avec succes" +
+        // (eventParticipants.length > 0
+        //   ? "avec" + eventParticipants.length + "participants"
+        //   : ""),
+        `Événement ${type} créé avec succès` +
+        (type === "private" && eventParticipants.length > 0
+          ? ` avec ${eventParticipants.length} participants`
+          : type === "group"
+          ? ` associé au groupe ${populatedEvent.group_id.nom}`
+          : ""),
+      data: {
+        event: populatedEvent,
+        participants: eventParticipants,
+      },
+    });
+  } catch (error) {
+    // annulation transaction en cas d'erreur
+    await session.abortTransaction();
+    session.endSession();
+
+    res.status(500).json({
+      success: false,
+      message: "Erreur interne lors de la creation de l'event",
       error: error.message,
     });
   }
