@@ -86,18 +86,19 @@ exports.addParticipant = async (req, res) => {
     }
 
     // rahe tsy mety ito de asorona try/catch , reste declaration savedParticipants+ if (!savedParticipants) {
-    try {
-      const savedParticipants = await Participant.insertMany(newParticipants, {
-        ordered: false,
-        rawResult: true,
-      }).catch((error) => {
-        // si certains doc en été insérés avant l'erreur de duplication
-        if (error.insertedDocs && error.insertedDocs.length > 0) {
-          return error.insertedDocs;
-        }
-        throw error; // relancer d'autre erreur
-      });
+    const savedParticipants = await Participant.insertMany(newParticipants, {
+      ordered: false,
+      rawResult: true,
+    }).catch((error) => {
+      // si certains doc en été insérés avant l'erreur de duplication
+      if (error.insertedDocs && error.insertedDocs.length > 0) {
+        return error.insertedDocs;
+      }
+      throw error; // relancer d'autre erreur
+    });
 
+    // misy probleme le savedParticipant satri alasa undefined de .map is not a function n
+    try {
       console.log(
         `${savedParticipants.insertCount} participants ajoutés sur ${newParticipants.length}`
       );
@@ -329,14 +330,11 @@ exports.removeParticipant = async (req, res) => {
     }
 
     // verification authorization que seul le createur peut supprimer un participant
-    if (
-      currentUser.toString() !== event.createur_id.toString() &&
-      currentUser.toString() !== userId.toString()
-    ) {
-      return res.status(403).json({
-        message: "Vous n'êtes pas autorisé à supprimer ce participant",
-      });
-    }
+    // if (currentUser.toString() !== event.createur_id.toString()) {
+    //   return res.status(403).json({
+    //     message: "Vous n'êtes pas autorisé à supprimer ce participant",
+    //   });
+    // }
 
     const deleteParticipant = await Participant.findOneAndDelete({
       event_id: eventId,

@@ -246,15 +246,13 @@ const GroupConversation = () => {
 
     if (!currentGroup || !currentConversation) {
       return (
-          <div className="text-center">
-              <p>Aucune conversation ou groupe sélectionné.</p>
-          </div>
-      );
+        <div className="h-full min-w-[70%] flex flex-col bg-gray-50 border-black rounded-lg pb-4 shadow-sm overflow-hidden text-center text-gray-500 justify-center">Sélectionnez un groupe pour afficher les messages de la conversation.</div>
+      )
   }
   
-    if (!currentConversation) {
+   /* if (!currentConversation) {
       return <div className="h-full min-w-[70%] flex flex-col bg-gray-50 border-black rounded-lg pb-4 shadow-sm overflow-hidden text-center text-gray-500 justify-center">Sélectionnez une conversation pour afficher les messages.</div>;
-    }
+    }*/
 
     return (
         <div className="h-full w-[70%] flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg pb-4 shadow-sm overflow-hidden ">

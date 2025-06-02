@@ -125,7 +125,7 @@ const GroupList = () => {
     }
 
     return (
-        <div className="h-full min-w-[248px] flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg mr-2 shadow-md overflow-hidden">
+        <div className="h-full min-w-[230px] flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg mr-2 shadow-md overflow-hidden">
             <div className="p-4 border-gray-200 "> 
                 <div className="flex justify-between items-center p-2">
                     <h2 className="text-lg font-semibold">Groupes</h2>

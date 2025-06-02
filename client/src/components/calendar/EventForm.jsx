@@ -176,6 +176,19 @@ const EventForm = ({ onClose, selectedEvent }) => {
           </div>
 
           <div className="flex gap-4 mb-4">
+            <label htmlFor="type" className="block font-medium">Type</label>
+            <select
+              name="type"
+              id="type"
+              value={eventData.type}
+              onChange={handleChange}
+              className="w-full mt-2 p-2 border bg-transparent border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option selected disabled>Sélectionnez un type d&apos;événement</option>
+            </select>
+          </div>
+
+          <div className="flex gap-4 mb-4">
             <div>
               <label className="block font-medium">Date de début</label>
               <input 
