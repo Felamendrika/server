@@ -87,11 +87,24 @@ exports.createGroup = async (req, res) => {
     const io = getIO();
     // evenement socket pour notifier la creation du groupe
     if (io) {
+      // Émettre l'événement de création du groupe
       io.emit("groupCreated", {
         group: populatedGroup, //savedGroup
         conversation: conversation,
         createur_id: createur_id,
       });
+
+      // Faire rejoindre la room du groupe au créateur
+      const creatorSocket = Array.from(io.sockets.sockets.values()).find(
+        (s) => s.user?.id === createur_id
+      );
+
+      if (creatorSocket) {
+        creatorSocket.join(`group_${savedGroup._id}`);
+        console.log(
+          `Créateur ${createur_id} a rejoint la room du groupe ${savedGroup._id}`
+        );
+      }
     } else {
       console.error("Socket.IO non initialisé");
       return res.status(500).json({
@@ -195,16 +208,27 @@ exports.updateGroup = async (req, res) => {
       });
     }
 
+    // Peupler le groupe modifié avec le créateur et les champs utiles
+    const populatedGroup = await Group.findById(updatedGroup._id).populate(
+      "createur_id",
+      "nom pseudo avatar"
+    );
+
+    const membres = await Membre.find({ group_id: groupId })
+      .populate("user_id", "nom pseudo avatar")
+      .populate("role_id", "type");
+
     const io = getIO();
     // evenement socket.io pour notifier de la mise a jour du groupe
     if (io) {
-      io.to(`group_${groupId}`).emit("groupModified", {
+      io.to(`group_${groupId}`).emit("updateGroup", {
         groupId,
-        group: updatedGroup,
-        membres: await Membre.find({ group_id: groupId })
-          .populate("user_id", "nom pseudo avatar")
-          .populate("role_id", "type"),
+        group: populatedGroup,
+        membres,
       });
+      console.log(
+        `Socket.IO : Groupe ${groupId} modifié et diffusé à tous les membres.`
+      );
     } else {
       console.error("Socket.IO non initialisé");
       return res.status(500).json({
@@ -293,24 +317,33 @@ exports.deleteGroup = async (req, res) => {
       });
     }
     //supprime tous les membres
+    const membres = await Membre.find({ group_id: groupId });
     await Membre.deleteMany({ group_id: groupId }); // Supprimer tous les membres du groupe
 
     const io = getIO();
     if (io) {
-      const conversation = await Conversation.findOne({ group_id: groupId });
-
-      const membres = await Membre.find({ group_id: groupId });
-
+      // Notifier tous les membres du groupe et les retirer de la room
       membres.forEach((membre) => {
-        io.to(`user_${membre.user_id}`).emit("groupDeleted", {
-          groupId,
-          conversationId: conversation._id,
-        });
+        const memberSocket = Array.from(io.sockets.sockets.values()).find(
+          (s) => s.user?.id?.toString() === membre.user_id.toString()
+        );
+        if (memberSocket) {
+          memberSocket.leave(`group_${groupId}`);
+          // Notifier le membre pour retirer le groupe de sa liste
+          memberSocket.emit("removeGroup", {
+            groupId,
+            conversationId: conversation?._id,
+          });
+        }
       });
-
-      //emission globale
-      io.emit("groupDeleted", { groupId, message: "Groupe supprimer" });
-      // io.emit("removeGroup", { groupId, message: "Groupe supprimer" });
+      // Emission globale à la room (sécurité)
+      io.to(`group_${groupId}`).emit("removeGroup", {
+        groupId,
+        conversationId: conversation?._id,
+      });
+      console.log(
+        `Socket.IO : Groupe ${groupId} supprimé et diffusé à tous les membres.`
+      );
     } else {
       console.error("Socket.IO non initialisé");
       return res.status(500).json({

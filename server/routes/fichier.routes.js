@@ -42,13 +42,13 @@ router.delete(
   fichierController.deleteFile
 );
 
-router.post("/search", authMiddleware, fichierController.searchFile);
+// router.post("/search", authMiddleware, fichierController.searchFile);
 
-// Route pour previsualiser un fichier (image uniquement)
-router.get(
-  "/preview/:fichierId",
-  authMiddleware,
-  fichierController.previewFile
-);
+// // Route pour previsualiser un fichier (image uniquement)
+// router.get(
+//   "/preview/:fichierId",
+//   authMiddleware,
+//   fichierController.previewFile
+// );
 
 module.exports = router;

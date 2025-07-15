@@ -1,9 +1,8 @@
-
 import { FiSearch} from 'react-icons/fi'
 import { AiOutlineLoading3Quarters, AiOutlineUsergroupAdd } from "react-icons/ai";
 import {HiOutlineUserGroup} from 'react-icons/hi'
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useGroup } from '../../context/GroupContext';
 import { useMessage } from '../../context/MessageContext';
 import { useSocket } from '../../context/SocketContext';
@@ -14,23 +13,26 @@ const GroupList = () => {
     const {
         groups,
         currentGroup,
-        //setCurrentGroup,
-        setCurrentGroupActive,
+        setCurrentGroup, // Utiliser le setter simple
         fetchUserGroups,
-        loading
+        loading,
+        updateGroupLastMessage
     } = useGroup()
 
     const {
         activeGroupConversation,
         setCurrentConversation,
         fetchConversationMessages,
-        clearConversationState
+        clearConversationState,
+        conversations
     } = useMessage()
 
     const { socket } = useSocket()
 
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [searchTerm, setSearchTerm] = useState("")
+
+    const prevGroupLastMessages = useRef({});
 
     useEffect(() => {
         const fetchData = async () => {
@@ -76,6 +78,19 @@ const GroupList = () => {
         }
     }, [socket, clearConversationState, fetchUserGroups])
 
+    // Synchronisation du dernier message de groupe en temps réel
+    useEffect(() => {
+        // Pour chaque conversation de groupe, synchroniser le dernier message dans le contexte groupe
+        conversations.forEach(conv => {
+            if (conv.type === 'group' && conv.group_id && conv.lastMessage) {
+                // On évite les updates inutiles
+                if (prevGroupLastMessages.current[conv.group_id._id] !== conv.lastMessage._id) {
+                    updateGroupLastMessage(conv.group_id._id, conv.lastMessage);
+                    prevGroupLastMessages.current[conv.group_id._id] = conv.lastMessage._id;
+                }
+            }
+        });
+    }, [conversations, updateGroupLastMessage])
 
     const toggleGroupModal = () => {
         setIsModalOpen(!isModalOpen)
@@ -87,23 +102,22 @@ const GroupList = () => {
 
     const handleSelectedGroup = async (group) => {
         try {
-            setCurrentGroupActive(group.group_id)
-            setCurrentConversation(null);
+            setCurrentGroup(group.group_id); // Active le groupe
+            setCurrentConversation(null); // Reset la conversation courante
 
-            const conversation = await activeGroupConversation(group.group_id._id)
-            // setCurrentConversation(conversation)
+            const conversation = await activeGroupConversation(group.group_id._id);
             if (conversation && conversation._id) {
-                socket?.emit('joinConversation', conversation._id)
-                fetchConversationMessages(conversation._id)
-            }else {
-                console.error("Aucune conversation selectionner")
+                socket?.emit('joinConversation', conversation._id);
+                fetchConversationMessages(conversation._id);
+            } else {
+                console.error("Aucune conversation selectionnée");
             }
             
-            console.log("Groupe selectionner :", group.group_id)
-            console.log("Conversation dy groupe :", conversation)
+            console.log("Groupe selectionné :", group.group_id);
+            console.log("Conversation du groupe :", conversation);
 
         } catch (error) {
-            console.error("Erreur lors de la selection du groupe:", error)
+            console.error("Erreur lors de la sélection du groupe:", error);
         }
     }
 

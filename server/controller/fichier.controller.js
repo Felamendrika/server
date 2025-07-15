@@ -41,12 +41,38 @@ const getFileType = (mimetype) => {
   return mapping[mimetype] || "application";
 };
 
-// Fonction utilitaire pour supprimer un fichier un fichier physique
-const deletePhysicalFile = (filePath) => {
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  } else {
-    console.log("Fichier déjà supprimé :", filePath);
+// Fonction utilitaire améliorée pour supprimer un fichier physique
+const deletePhysicalFile = async (fileUrl) => {
+  try {
+    // Extraire le nom du fichier de l'URL ou du chemin
+    let fileName;
+    if (fileUrl.includes("http")) {
+      const urlParts = new URL(fileUrl);
+      fileName = urlParts.pathname.split("/uploads/").pop();
+    } else {
+      fileName = fileUrl.split("/uploads/").pop();
+    }
+
+    if (!fileName) {
+      console.error("Nom de fichier non trouvé dans:", fileUrl);
+      return false;
+    }
+
+    // Construire le chemin absolu
+    const filePath = path.join(__dirname, "..", "uploads", fileName);
+
+    // Vérifier si le fichier existe
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log("Fichier supprimé avec succès:", fileName);
+      return true;
+    } else {
+      console.log("Fichier déjà supprimé ou introuvable:", fileName);
+      return false;
+    }
+  } catch (error) {
+    console.error("Erreur lors de la suppression du fichier:", error);
+    return false;
   }
 };
 
@@ -124,25 +150,20 @@ exports.uploadAndCreateFile = async (req, res) => {
     // mise a jour du champ fichier en BD
     await newFile.save();
 
-    /*const io = getIO();
+    // Émission de l'événement socket après l'upload réussi
+    const io = getIO();
     if (io) {
       io.to(`conversation_${message.conversation_id}`).emit("newFile", {
         fichier: newFile,
         messageId: message_id,
         conversationId: message.conversation_id,
       });
-    } else {
-      console.warn("Socket.IO non disponible pour la diffusion.");
-      return res.status(500).json({
-        message:
-          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
-      });
-    } */
+    }
 
     //retourner l'URL du fichier telecharger
     res.status(200).json({
       success: true,
-      message: "Fichier telechargé et associé avec succès ",
+      message: "Fichier téléchargé et associé avec succès",
       fichier: newFile,
       //fileUrl: `${req.protocol}://${req.get("host")}/${chemin_fichier}`, //chemin_fichier
       //fileUrl: `/uploads/${req.file.filename}`,
@@ -363,80 +384,91 @@ exports.updateFile = async (req, res) => {
   }
 };
 
-// Suppression d'un fichier
+// Fonction pour supprimer un fichier et ses références
 exports.deleteFile = async (req, res) => {
   try {
     const { fichierId } = req.params;
 
     if (!isValidObjectId(fichierId)) {
-      return res.status(404).json({
-        message: "ID fichier invalide",
+      return res.status(400).json({
+        message: "ID de fichier invalide",
       });
     }
 
     const fichier = await Fichier.findById(fichierId);
     if (!fichier) {
       return res.status(404).json({
-        message: "Fichier introuvable",
+        message: "Fichier non trouvé",
       });
+    } // Supprimer le fichier physique
+    const fichierDeleted = await deletePhysicalFile(fichier.chemin_fichier);
+    if (!fichierDeleted) {
+      console.warn(
+        `Le fichier physique ${fichier.chemin_fichier} n'a pas pu être supprimé`
+      );
     }
 
-    // Récupérer le message associé
-    const message = await Message.findById(fichier.message_id);
-    if (!message) {
-      return res.status(404).json({ message: "Message associé introuvable" });
-    }
+    // Supprimer la référence dans le message
+    await Message.updateOne(
+      { _id: fichier.message_id },
+      { $pull: { files: fichierId } }
+    );
 
-    const conversation_id = message.conversation_id;
+    // Supprimer le fichier de la base de données
+    await Fichier.deleteOne({ _id: fichierId });
 
-    // suppression du fichier du serveur
-    const filePath = path.resolve(fichier.chemin_fichier);
-    deletePhysicalFile(filePath);
-    console.log("Chemin du fichier à supprimer :", filePath);
-
-    // Suppression de la reference dans le message
-    if (message) {
-      message.fichier = null;
-      message.isDeleted = true;
-      await message.save();
-    }
-
-    // Supprimer de l'entree en BD
-    const deletedFichier = await Fichier.findByIdAndDelete(fichierId);
-
-    if (!deletedFichier) {
-      return res.status(404).json({
-        message: "Fichier non supprimer",
-      });
-    }
-
+    // Émettre l'événement socket
     const io = getIO();
     if (io) {
-      io.to(`conversation_${conversation_id}`).emit("fileRemoved", {
-        fichierId,
-        messageId: message._id,
-        conversation_id: conversation_id,
-      });
-    } else {
-      console.warn("Socket.IO non disponible pour la diffusion.");
-      return res.status(500).json({
-        message:
-          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      io.to(`conversation_${fichier.message_id}`).emit("fileRemoved", {
+        fileId: fichierId,
+        messageId: fichier.message_id,
+        conversationId: fichier.conversation_id,
       });
     }
 
-    res.status(200).json({
-      success: true,
+    return res.status(200).json({
       message: "Fichier supprimé avec succès",
+      fileId: fichierId,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Erreur serveur lors de la suppression du fichier",
+    console.error("Erreur lors de la suppression du fichier:", error);
+    return res.status(500).json({
+      message: "Erreur lors de la suppression du fichier",
       error: error.message,
     });
   }
 };
+
+// Fonction pour nettoyer les fichiers orphelins
+exports.cleanupOrphanedFiles = async () => {
+  try {
+    const uploadDir = path.join(__dirname, "..", "uploads");
+    const files = fs.readdirSync(uploadDir);
+
+    for (const file of files) {
+      const filePath = path.join(uploadDir, file);
+      const stats = fs.statSync(filePath);
+
+      // Vérifier si le fichier existe dans la base de données
+      const fileInDb = await Fichier.findOne({
+        url: { $regex: file, $options: "i" },
+      });
+
+      if (!fileInDb) {
+        // Si le fichier n'est pas référencé dans la base de données, le supprimer
+        fs.unlinkSync(filePath);
+        console.log(`Fichier orphelin supprimé: ${file}`);
+      }
+    }
+
+    console.log("Nettoyage des fichiers orphelins terminé");
+  } catch (error) {
+    console.error("Erreur lors du nettoyage des fichiers orphelins:", error);
+  }
+};
+
+/*
 
 // Recherche de fichiers par nom et type
 exports.searchFile = async (req, res) => {
@@ -514,3 +546,4 @@ exports.previewFile = async (req, res) => {
     });
   }
 };
+*/

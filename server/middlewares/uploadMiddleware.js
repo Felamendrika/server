@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
   },
 });
 
-const limits = { fileSize: 10 * 1024 * 1024 }; // limite a 10Mo
+const limits = { fileSize: 50 * 1024 * 1024 }; // limite à 50Mo
 
 // Filtrer les fichiers selon leur type
 const fileFilter = (req, file, cb) => {
@@ -51,6 +51,45 @@ const fileFilter = (req, file, cb) => {
     cb(error, false);
   }
 };
+
+// Création d'un middleware personnalisé pour suivre la progression
+const uploadWithProgress = (req, res, next) => {
+  const upload = multer({ storage, limits, fileFilter }).single("file");
+
+  upload(req, res, (err) => {
+    if (err) {
+      if (err instanceof multer.MulterError) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({
+            message: "Le fichier est trop volumineux (limite: 50Mo)",
+            error: err.message,
+          });
+        }
+      }
+      return res.status(400).json({
+        message: err.message || "Erreur lors du téléchargement",
+        error: err,
+      });
+    }
+
+    // Émettre un événement pour indiquer que le téléchargement est terminé
+    if (req.file) {
+      const io = require("../socket/socket").getIO();
+      io.to(`conversation_${req.body.conversation_id}`).emit("uploadProgress", {
+        filename: req.file.originalname,
+        progress: 100,
+        status: "completed",
+      });
+    }
+
+    next();
+  });
+};
+
+module.exports = uploadWithProgress;
+
+/*
+// a mettre avant le next()
 
 const upload = multer({
   storage,
@@ -83,19 +122,4 @@ const uploadMiddleware = (req, res, next) => {
         message: err.message,
       });
     }
-
-    /* 
-    //ajouter un chemin complet pour le fichier upload
-    if(req.file) {
-      const protocol = req.protocol
-      const host = req.get("host")
-      req.file.publicUrl = `${protocol}://${host}/uploads/${req.file.filename}`
-    }
-    */
-
-    // si tout est OK, on passe au middleware suivant
-    next();
-  });
-};
-
-module.exports = uploadMiddleware;
+*/

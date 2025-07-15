@@ -10,24 +10,27 @@ import { MessageProvider } from './context/MessageContext.jsx';
 import { GroupProvider } from './context/GroupContext.jsx';
 import { EventProvider } from './context/EventContext.jsx';
 import { SocketProvider } from './context/SocketContext.jsx'
+import { ConnectionProvider } from './context/ConnectionContext.jsx'
 import ErrorBoundary from './components/layout/ErrorBoundary.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
       <ErrorBoundary>
-          <SocketProvider>
-            <AuthProvider>
-              <MessageProvider>
-                <GroupProvider>
-                  <EventProvider>
-                        <ToastContainer autoClose={3000} closeOnClick/>
-                        <App />
-                  </EventProvider>
-                </GroupProvider>
-              </MessageProvider>
-            </AuthProvider>
-          </SocketProvider>
+        <ConnectionProvider>
+            <SocketProvider>
+              <AuthProvider>
+                <MessageProvider>
+                  <GroupProvider>
+                    <EventProvider>
+                          <ToastContainer autoClose={3000} closeOnClick/>
+                          <App />
+                    </EventProvider>
+                  </GroupProvider>
+                </MessageProvider>
+              </AuthProvider>
+            </SocketProvider>
+        </ConnectionProvider>
       </ErrorBoundary>
     </BrowserRouter>
   </StrictMode>,

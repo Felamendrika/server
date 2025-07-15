@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react"
 import { FiSearch, FiTrash } from "react-icons/fi"
 import {BsFileText} from 'react-icons/bs'
@@ -32,23 +31,92 @@ const MediaList = () => {
   // Écouter les événements socket pour les fichiers
   useEffect(() => {
     if (socket && currentConversation?._id) {
-      socket.on("newFile", (data) => {
-        if (currentConversation._id === data.conversationId) {
-          setImages(prev => [...prev, data.fichier].filter(f => f.type.startsWith("image")));
-          setOtherFiles(prev => [...prev, data.fichier].filter(f => !f.type.startsWith("image")));
+
+      //gestionnaire d'ajout de fichier
+      const handleNewFile = (data) => {
+        if (currentConversation?._id === data.conversationId) {
+          const newFichier = data.fichier
+
+          //verif doublons avant ajout
+          const isDuplicate = (list, file) => list.some(f => f._id === file._id)
+
+          if (newFichier.type.startsWith("image")) {
+            setImages(prev => {
+              if (!isDuplicate(prev, newFichier)) {
+                return [...prev, newFichier].filter(f=> f.type.startsWith("image"))
+              }
+              return prev
+            })
+          } else {
+            setOtherFiles(prev => {
+              if (!isDuplicate(prev, newFichier)) {
+                return [...prev, newFichier]
+              }
+              return prev
+            })
+          }
         }
-      });
-  
-      socket.on("fileRemoved", (data) => {
-        if (currentConversation._id === data.conversationId) {
-          setImages(prev => prev.filter(f => f._id !== data.fichierId));
-          setOtherFiles(prev => prev.filter(f => f._id !== data.fichierId));
+      }
+
+      // gestionnaire de suppression de fichier avec verif
+      const handleFileRemoved = (data) => {
+        if (currentConversation?._id === data?.conversationId) {
+          const fichierId = data.fichierId
+          const messageId = data.messageId 
+
+          // maj des etats avec verif
+          setImages(prev => {
+            const filtered = prev.filter(f => f._id !== fichierId)
+            return filtered.length !== prev.length ? filtered : prev
+          })
+
+          setOtherFiles(prev => {
+            const filtered = prev.filter(f => f._id !== fichierId)
+            return filtered.length !== prev.length ? filtered : prev
+          })
+
+          // si message associé est supprimé, rafraichir la liste complete
+          if (messageId) {
+            fetchFilesByConversations(currentConversation._id)
+          }
         }
+      }
+
+      //gestionnaire de rafraichissement des fichiers
+      const handleRefreshFiles = (data) => {
+        if (currentConversation?._id === data.conversation) {
+          // maj la liste complete des fichiers
+          fetchFilesByConversations(currentConversation._id)
+        }
+      }
+
+      //gestionnaire d'erreur de fichier
+      const handleFileError = (data) => {
+        if (currentConversation?._id === data.conversationId) {
+          console.error("Erreur de fichier :", data.error)
+          
+          //rafraichir la liste en cas d'erreur
+          fetchFilesByConversations(currentConversation._id)
+        }
+      }
+
+      // Abonnement aux événements
+      socket.on("newFile", handleNewFile);
+      socket.on("fileRemoved", handleFileRemoved);
+      socket.on("refreshConversationFiles", handleRefreshFiles);
+      socket.on("fileError", handleFileError);
+
+      // Demander une mise à jour initiale
+      socket.emit("requestFilesList", {
+        conversationId: currentConversation._id
       });
-  
+    
+      // Nettoyage des écouteurs
       return () => {
-        socket.off("newFile");
-        socket.off("fileRemoved");
+        socket.off("newFile", handleNewFile);
+        socket.off("fileRemoved", handleFileRemoved);
+        socket.off("refreshConversationFiles", handleRefreshFiles);
+        socket.off("fileError", handleFileError);
       };
     }
   }, [socket, currentConversation, fetchFilesByConversations])
@@ -80,17 +148,33 @@ const MediaList = () => {
 
   const handleDeleteFile = async (fichierId) => {
     try {
-      await deleteFile(fichierId)
+      // Suppression optimiste de l'interface utilisateur
+      const fileToDelete = [...images, ...otherFiles].find(f => f._id === fichierId);
       
-      // Émettre l'événement de suppression via socket
+      if (fileToDelete?.type.startsWith("image")) {
+        setImages(prev => prev.filter(f => f._id !== fichierId));
+      } else {
+        setOtherFiles(prev => prev.filter(f => f._id !== fichierId));
+      }
+
+      // Appel API pour la suppression
+      await deleteFile(fichierId);
+      
+      // Notification socket
       socket?.emit("fileDeleted", {
         fichierId,
         conversationId: currentConversation._id
-      })
+      });
+
+      // Rafraîchir la liste après la suppression
+      await fetchFilesByConversations(currentConversation._id);
+
     } catch (error) {
       console.error("Erreur lors de la suppression du fichier :", error);
+      // Restaurer l'état en cas d'erreur
+      await fetchFilesByConversations(currentConversation._id);
     }
-  }
+  };
   
   if (loading) {
     return <div className="h-full min-w-[175px] flex flex-col border-gray-200 border-2 bg-gray-50 rounded-lg ml-2 shadow-md overflow-hidden text-center">Chargement des medias...</div>;
@@ -198,3 +282,27 @@ const MediaList = () => {
 }
 
 export default MediaList
+
+      /*socket.on("newFile", (data) => {
+        if (currentConversation?._id === data.conversationId) {
+          // ajout immediat sans refresh 
+          const newFichier = data.fichier
+
+          if (newFichier.type.startsWith("image")) {
+            setImages(prev => [...prev, newFichier].filter(f => f.type.startsWith("image")));
+          } else {
+            setOtherFiles(prev => [...prev, newFichier])
+          }
+          //setImages(prev => [...prev, data.fichier].filter(f => f.type.startsWith("image")));
+          //setOtherFiles(prev => [...prev, data.fichier].filter(f => !f.type.startsWith("image")));
+        }
+      });
+  
+      socket.on("fileRemoved", (data) => {
+        if (currentConversation?._id === data?.conversationId) {
+
+          const fichierId = data.fichierId;
+          setImages(prev => prev.filter(f => f._id !== fichierId));
+          setOtherFiles(prev => prev.filter(f => f._id !== fichierId));
+        }
+      }); */

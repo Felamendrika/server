@@ -40,5 +40,12 @@ conversationSchema.index({ sender_id: 1 });
 conversationSchema.index({ receiver_id: 1 });
 conversationSchema.index({ group_id: 1 });
 
+// Middleware pré-suppression
+conversationSchema.pre("remove", async function (next) {
+  // Supprimer tous les messages associés
+  await this.model("Message").deleteMany({ conversation_id: this._id });
+  next();
+});
+
 const Conversation = mongoose.model("Conversation", conversationSchema);
 module.exports = Conversation;

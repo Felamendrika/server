@@ -8,7 +8,7 @@ const fichierSchema = mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ["pdf", "image", "document", "excel", "powerpoint", "application"],
+    enum: ["pdf", "image", "word", "excel", "powerpoint", "text", "document", "application"],
     required: true,
   },
   taille: {

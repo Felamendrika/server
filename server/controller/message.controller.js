@@ -40,6 +40,7 @@ const ALLOWED_FILE_TYPES = [
   "excel",
   "powerpoint",
   "text",
+  "document",
   "application",
 ];
 

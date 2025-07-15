@@ -139,15 +139,36 @@ exports.addMembre = async (req, res) => {
     const io = getIO();
     // emission d'un evenement socket.io
     if (io) {
+      // Émettre l'événement aux membres du groupe
       io.to(`group_${group_id}`).emit("membreAdded", {
         membre: fullMembre,
         group: group,
-        //groupId: group_id,
+        group_id: group_id,
       });
 
-      io.to(`group_${user_id}`).emit("joinedGroup", {
+      // Faire rejoindre la room du groupe au nouveau membre
+      const newMemberSocket = Array.from(io.sockets.sockets.values()).find(
+        (s) => s.user?.id === user_id
+      );
+
+      if (newMemberSocket) {
+        newMemberSocket.join(`group_${group_id}`);
+        console.log(
+          `Nouveau membre ${user_id} a rejoint la room du groupe ${group_id}`
+        );
+
+        // Émettre l'événement au nouveau membre pour qu'il voit le groupe
+        newMemberSocket.emit("joinedGroup", {
+          group: group,
+          membre: fullMembre,
+        });
+      }
+
+      // Émettre l'événement global pour la mise à jour des listes
+      io.emit("groupMemberAdded", {
         group: group,
-        // conversation: conversation,
+        membre: fullMembre,
+        group_id: group_id,
         conversation: group_id.conversation,
       });
     } else {
@@ -230,23 +251,18 @@ exports.updateMembreRole = async (req, res) => {
     }
     // metre a jour le role du membre
     membre.role_id = role._id;
-
     const updatedmembre = await membre.save();
 
     const io = getIO();
-    //emission d'un evenement socket.io
-    // if (io) {
-    //   io.to(`group_${membre.group_id}.toString()`).emit("membreRoleChanged", {
-    //     membreId,
-    //     role,
-    //   });
-    // } else {
-    //   console.error("Socket.IO non initialisé");
-    //   return res.status(500).json({
-    //     message:
-    //       "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
-    //   });
-    // }
+    if (io) {
+      io.to(`group_${membre.group_id}`).emit("membreRoleChanged", {
+        membre: await Membre.findById(membre._id)
+          .populate("user_id", "nom prenom pseudo avatar")
+          .populate("group_id", "nom")
+          .populate("role_id", "type"),
+        group_id: membre.group_id,
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -310,18 +326,31 @@ exports.removeMembreFromGroup = async (req, res) => {
     await Membre.findByIdAndDelete(membreId);
 
     const io = getIO();
-    // evenement Socket
-    // if (io) {
-    //   io.to(`group_${membre.group_id}.toString()`).emit("membreDeleted", {
-    //     membreId,
-    //   });
-    // } else {
-    //   console.error("Socket.IO non initialisé");
-    //   return res.status(500).json({
-    //     message:
-    //       "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
-    //   });
-    // }
+    if (io) {
+      // Émettre à tous les membres du groupe la suppression
+      io.to(`group_${membre.group_id}`).emit("membreDeleted", {
+        userId: membre.user_id,
+        group_id: membre.group_id,
+      });
+
+      // Retirer le membre de la room socket côté serveur
+      const removedMemberSocket = Array.from(io.sockets.sockets.values()).find(
+        (s) => s.user?.id?.toString() === membre.user_id.toString()
+      );
+      if (removedMemberSocket) {
+        removedMemberSocket.leave(`group_${membre.group_id}`);
+        // Notifier le membre supprimé pour retirer le groupe de sa liste
+        removedMemberSocket.emit("removedFromGroup", {
+          group_id: membre.group_id,
+        });
+      }
+    } else {
+      console.error("Socket.IO non initialisé");
+      return res.status(500).json({
+        message:
+          "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
+      });
+    }
 
     res.status(200).json({
       success: true,

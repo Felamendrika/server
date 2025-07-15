@@ -61,9 +61,13 @@ exports.createConversation = async (req, res) => {
           group_id: response.conversation.group_id,
         });
         groupMembres.forEach((membre) => {
-          if (membre.user_id.toString() !== req.user._id.toString()) {
-            io.to(`user_${membre.user_id}`).emit("groupConversationCreated", {
-              // type: "group",
+          // Trouver le socket du membre
+          const memberSocket = Array.from(io.sockets.sockets.values()).find(
+            (s) => s.user?.id?.toString() === membre.user_id.toString()
+          );
+          if (memberSocket) {
+            memberSocket.join(`conversation_${response.conversation._id}`);
+            memberSocket.emit("groupConversationCreated", {
               conversation: response.conversation,
             });
           }

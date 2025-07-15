@@ -4,7 +4,7 @@ const { verifyToken } = require("../utils/jwt");
 let io = null; // Instance globale
 
 // let connectedUsers = [];
-let connectedUsers = new Map();
+let connectedUsers = new Map(); //stocker les users connectees
 
 const initializeSocket = (server) => {
   // Config de socket.io
@@ -53,16 +53,25 @@ const initializeSocket = (server) => {
 
     if (socket.user?.id) {
       connectedUsers.set(socket.user.id, {
-        socketId: socket.id,
-        activeConversation: null,
+        socketId: socket?.id,
+        // activeConversation: null,
         lastSeen: Date.now(),
       });
     }
 
     socket.on("userConnected", () => {
       if (socket.user?.id) {
-        socket.broadcast.emit("userOnline", { userId: socket.user.id });
+        connectedUsers.set(socket.user.id, {
+          socketId: socket?.id,
+          // activeConversation: null,
+          lastSeen: Date.now(),
+        });
+        // socket.broadcast.emit("userOnline", { userId: socket.user.id });
         io.emit("updateOnlineUsers", Array.from(connectedUsers.keys()));
+        console.log(
+          "Utilisateurs en ligne :",
+          Array.from(connectedUsers.keys())
+        );
       }
     });
 
@@ -103,10 +112,11 @@ const initializeSocket = (server) => {
       //Emission aux utilisateurs dans la conversation
       io.to(roomName).emit("messageReceived", {
         message,
-        conversation_id: conversation_id,
+        conversation_id,
         senderId: socket.user.id,
         timestamp: Date.now(),
       });
+      console.log(`[SOCKET] Nouveau message dans ${roomName} :`, message);
 
       // mise a jour de la conversation pour le destinataire
       const receiverSocket = Array.from(io.sockets.sockets.values()).find(
@@ -119,10 +129,6 @@ const initializeSocket = (server) => {
           lastMessage: message,
         });
       }
-      console.log(
-        `Message envoyé dans la conversation ${conversation_id}:`,
-        message
-      );
     });
 
     socket.on("messageUpdated", (data) => {
@@ -132,13 +138,14 @@ const initializeSocket = (server) => {
         conversationId,
         timestamp: Date.now(),
       });
-
       io.emit("conversationUpdated", {
         conversationId,
         lastMessage: message,
       });
-
-      console.log(`Message maj dans conversation ${conversationId}:`, message);
+      console.log(
+        `[SOCKET] Message modifié dans conversation_${conversationId} :`,
+        message
+      );
     });
 
     socket.on("messageDeleted", (data) => {
@@ -148,13 +155,14 @@ const initializeSocket = (server) => {
         conversationId,
         timestamp: Date.now(),
       });
-
       io.emit("conversationUpdated", {
         conversationId,
         lastMessage: { contenu: "Message supprimé", isDeleted: true },
       });
-
-      console.log(`Message supprimer dans conversation ${conversationId}`);
+      console.log(
+        `[SOCKET] Message supprimé dans conversation_${conversationId} :`,
+        messageId
+      );
     });
 
     socket.on("newPrivateConversation", (data) => {
@@ -176,31 +184,79 @@ const initializeSocket = (server) => {
     socket.on("groupCreated", (data) => {
       const { group, conversation, createur_id } = data;
 
-      io.emit("newGroup", {
+      // Rejoindre la room du groupe pour le créateur
+      socket.join(`group_${group._id}`);
+
+      // Émettre l'événement uniquement au créateur
+      socket.emit("newGroup", {
         group: group,
         conversation,
         createur_id: createur_id,
       });
 
-      console.log("Groupe creer en direct :", group);
+      console.log("Groupe créé en direct :", group);
+    });
+
+    // Rejoindre les rooms des groupes lors de la connexion
+    socket.on("joinUserGroups", async () => {
+      if (socket.user?.id) {
+        try {
+          const Membre = require("../models/membre.model");
+          const userGroups = await Membre.find({
+            user_id: socket.user.id,
+          }).populate("group_id");
+
+          userGroups.forEach((membre) => {
+            socket.join(`group_${membre.group_id._id}`);
+            console.log(
+              `Utilisateur ${socket.user.id} a rejoint la room du groupe ${membre.group_id._id}`
+            );
+          });
+        } catch (error) {
+          console.error(
+            "Erreur lors de la récupération des groupes de l'utilisateur:",
+            error
+          );
+        }
+      }
+    });
+
+    socket.on("joinGroup", (groupId) => {
+      if (socket.user?.id && groupId) {
+        socket.join(`group_${groupId}`);
+        console.log(
+          `Utilisateur ${socket.user.id} a rejoint la room du groupe ${groupId}`
+        );
+      }
+    });
+
+    socket.on("leaveGroup", (groupId) => {
+      if (socket.user?.id && groupId) {
+        socket.leave(`group_${groupId}`);
+        console.log(
+          `Utilisateur ${socket.user.id} a quitté la room du groupe ${groupId}`
+        );
+      }
     });
 
     socket.on("groupModified", (data) => {
       const { group, membres } = data;
-      io.to(`group_${group_id}`).emit("updateGroup", {
+      // Émettre aux membres du groupe uniquement
+      io.to(`group_${group._id}`).emit("updateGroup", {
         group,
         membres,
       });
-      console.log("Groupe modifier en direct :", group);
+      console.log("Groupe modifié en direct :", group);
     });
 
     socket.on("groupDeleted", (data) => {
       const { groupId, conversationId } = data;
-      io.emit("removeGroup", {
+      // Émettre aux membres du groupe uniquement
+      io.to(`group_${groupId}`).emit("removeGroup", {
         groupId,
         conversationId,
       });
-      console.log("Groupe supprimer en direct :", groupId);
+      console.log("Groupe supprimé en direct :", groupId);
     });
 
     /*socket.on("newGroupConversation", (data) => {
@@ -218,13 +274,17 @@ const initializeSocket = (server) => {
     // gestion de fichiers
     socket.on("fileUploaded", (data) => {
       const { conversationId, messageId, fichier } = data;
-      io.to(`conversation_${data.conversationId}`).emit("newFile", {
+      io.to(`conversation_${conversationId}`).emit("newFile", {
         fichier,
         messageId,
         conversationId,
       });
+      io.to(`conversation_${conversationId}`).emit("refreshConversationFiles", {
+        conversationId,
+      });
       console.log(
-        `Nouveau fichier uploadé dans conversation ${conversationId}`
+        `[SOCKET] Nouveau fichier uploadé dans conversation_${conversationId} :`,
+        fichier
       );
     });
 
@@ -235,8 +295,12 @@ const initializeSocket = (server) => {
         messageId,
         conversationId,
       });
+      io.to(`conversation_${conversationId}`).emit("refreshConversationFiles", {
+        conversationId,
+      });
       console.log(
-        `Fichier supprimé de la conversation ${data.conversation_id}`
+        `[SOCKET] Fichier supprimé dans conversation_${conversationId} :`,
+        fichierId
       );
     });
 
@@ -286,7 +350,7 @@ const initializeSocket = (server) => {
     // GESTION DE DECONNEXION
     socket.on("disconnect", () => {
       if (socket.user?.id) {
-        connectedUsers.delete(socket.user.id);
+        connectedUsers.delete(socket?.user?.id);
         socket.broadcast.emit("userOffline", { userId: socket.user?.id });
         io.emit("updateOnlineUsers", Array.from(connectedUsers.keys()));
       }

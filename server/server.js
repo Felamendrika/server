@@ -74,6 +74,13 @@ server.listen(port, () => {
   console.log(`Serveur démarré sur le port ${port}`);
 });
 
+// Nettoyer les fichiers orphelins toutes les 24 heures
+const { cleanupOrphanedFiles } = require("./controller/fichier.controller");
+setInterval(async () => {
+  console.log("Début du nettoyage des fichiers orphelins...");
+  await cleanupOrphanedFiles();
+}, 24 * 60 * 60 * 1000); // 24 heures
+
 // Export 'io' pour les controller
 module.exports = { app, server };
 

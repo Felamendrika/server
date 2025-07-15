@@ -7,6 +7,7 @@ import UserList from "./UsersList"
 import { useMessage } from "../../context/MessageContext";
 
 import { useSocket } from "../../context/SocketContext";
+import { useConnection } from "../../context/ConnectionContext";
 
 //import { format} from "date-fns";
 import { formatDistanceToNow } from "date-fns";
@@ -28,7 +29,8 @@ const ConversationList = () => {
         loading
     } = useMessage()
 
-    const { socket, isUserOnline } = useSocket();  // Modification ici
+    const { socket} = useSocket();  // Modification ici
+    const { isUserOnline } = useConnection();
 
     // Fonction pour vérifier si un utilisateur est en ligne
     // const isUserOnline = useCallback((userId) => {
