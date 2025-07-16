@@ -1,6 +1,8 @@
 const Message = require("../models/message.model");
 const Conversation = require("../models/conversation.model");
 const Fichier = require("../models/fichier.model");
+const Membre = require("../models/membre.model");
+const { createNotification } = require("../utils/notification");
 
 const path = require("path");
 const fs = require("fs");
@@ -157,6 +159,53 @@ exports.createMessage = async (req, res) => {
       { path: "user_id", select: "_id nom pseudo avatar" },
       { path: "fichier", select: " _id nom type taille chemin_fichier" },
     ]);
+
+    // Création de notification
+    if (conversation.type === "private") {
+      // Notifier l'autre utilisateur
+      const receiverId =
+        conversation.sender_id.toString() === user_id.toString()
+          ? conversation.receiver_id
+          : conversation.sender_id;
+      await createNotification({
+        userId: receiverId,
+        fromUserId: user_id,
+        type: "message",
+        message: `Nouveau message de ${req.user.pseudo || req.user.nom}`,
+        relatedId: newMessage._id,
+      });
+    } else if (conversation.type === "group") {
+      // Notifier tous les membres du groupe sauf l'auteur
+      const membres = await Membre.find({ group_id: conversation_id.group_id });
+
+      if (!membres || membres.length === 0) {
+        console.error("Aucun membre trouver dans la conversation a notifier");
+      }
+
+      for (const membre of membres) {
+        const membreUserId = membre.user_id.toString();
+        if (membreUserId !== user_id.toString()) {
+          const notif = await createNotification({
+            userId: membreUserId,
+            fromUserId: user_id, // user qui est l'auteur du message
+            type: "message",
+            message: `Nouveau message dans le groupe : ${conversation_id.group_id?.nom}`,
+            relatedId: newMessage._id,
+          });
+
+          if (!notif) {
+            console.error(
+              "Notification non envoyee au membre pour le nouveau message"
+            );
+          } else {
+            console.log(
+              "Notification envoyee au membre pour le nouveau message",
+              notif
+            );
+          }
+        }
+      }
+    }
 
     // modif pour fichiers
     // Population des données nécessaires

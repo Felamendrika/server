@@ -6,6 +6,7 @@ const { isValidObjectId } = require("mongoose");
 const Conversation = require("../models/conversation.model");
 const Message = require("../models/message.model");
 const { getIO } = require("../socket/socket");
+const { createNotification } = require("../utils/notification");
 
 // Middleware pour verifier si l'utilisateur est admin
 const isAdmin = async (userId, groupId) => {
@@ -217,6 +218,18 @@ exports.updateGroup = async (req, res) => {
     const membres = await Membre.find({ group_id: groupId })
       .populate("user_id", "nom pseudo avatar")
       .populate("role_id", "type");
+
+    for (const membre of membres) {
+      if (membre.user_id._id.toString() !== adminId.toString()) {
+        await createNotification({
+          userId: membre.user_id._id,
+          fromUserId: adminId,
+          type: "group",
+          message: `Le groupe ${populatedGroup.nom} a été modifié.`,
+          relatedId: groupId,
+        });
+      }
+    }
 
     const io = getIO();
     // evenement socket.io pour notifier de la mise a jour du groupe

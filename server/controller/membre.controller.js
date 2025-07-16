@@ -2,6 +2,7 @@ const Membre = require("../models/membre.model");
 const Group = require("../models/group.model");
 const Role = require("../models/role.model");
 const User = require("../models/user.model");
+const { createNotification } = require("../utils/notification");
 
 const mongoose = require("mongoose");
 //const { isValidObjectId } = require("mongoose")
@@ -179,6 +180,14 @@ exports.addMembre = async (req, res) => {
       });
     }
 
+    await createNotification({
+      userId: user_id,
+      fromUserId: userId, // l'admin qui ajoute
+      type: "group",
+      message: `Vous avez été ajouté au groupe : ${group.nom}`,
+      relatedId: group_id,
+    });
+
     res.status(201).json({
       success: true,
       message: "Membre ajouté au groupe avec succes",
@@ -263,6 +272,14 @@ exports.updateMembreRole = async (req, res) => {
         group_id: membre.group_id,
       });
     }
+
+    await createNotification({
+      userId: membre.user_id,
+      fromUserId: adminId,
+      type: "role",
+      message: `Votre rôle a été modifié dans le groupe : ${membre.group_id}`,
+      relatedId: membre.group_id,
+    });
 
     res.status(200).json({
       success: true,
@@ -351,6 +368,14 @@ exports.removeMembreFromGroup = async (req, res) => {
           "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
       });
     }
+
+    await createNotification({
+      userId: membre.user_id,
+      fromUserId: adminId,
+      type: "group",
+      message: `Vous avez été retiré du groupe : ${membre.group_id}`,
+      relatedId: membre.group_id,
+    });
 
     res.status(200).json({
       success: true,

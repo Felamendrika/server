@@ -3,6 +3,7 @@ const User = require("../models/user.model");
 const Participant = require("../models/participant.model");
 const Group = require("../models/group.model");
 const Membre = require("../models/membre.model");
+const { createNotification } = require("../utils/notification");
 
 const { isValidObjectId } = require("mongoose");
 const { getIO } = require("../socket/socket");
@@ -135,6 +136,21 @@ exports.createEvent = async (req, res) => {
         message:
           "Erreur serveur interne. Socket.IO non disponible pour la diffusion",
       });
+    }
+
+    // Après la création de l'événement public (dans createEvent) :
+    if (type === "public") {
+      // Notifier tous les utilisateurs sauf le créateur
+      const allUsers = await User.find({ _id: { $ne: createur_id } });
+      for (const user of allUsers) {
+        await createNotification({
+          userId: user._id,
+          fromUserId: createur_id,
+          type: "event",
+          message: `Nouvel événement public : ${titre}`,
+          relatedId: newEvent._id,
+        });
+      }
     }
 
     res.status(201).json({

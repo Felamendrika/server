@@ -438,4 +438,9 @@ const getIO = () => {
   return io;
 };
 
-module.exports = { initializeSocket, getIO };
+function getUserSocketId(userId) {
+  const user = connectedUsers.get(userId);
+  return user ? user.socketId : null;
+}
+
+module.exports = { initializeSocket, getIO, getUserSocketId, connectedUsers };

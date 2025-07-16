@@ -35,6 +35,7 @@ const participantRoutes = require("./routes/participant.routes");
 const membreRoutes = require("./routes/membre.routes");
 const roleRoutes = require("./routes/role.routes");
 const fichierRoutes = require("./routes/fichier.routes");
+const notificationRoutes = require("./routes/notification.routes");
 
 // Importation du middleWare de gestion d'erreur
 const errorHandler = require("./middlewares/errorMiddleware");
@@ -58,6 +59,7 @@ app.use("/api/roles", roleRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/participants", participantRoutes);
 app.use("/api/fichiers", fichierRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Middleware pour servir les fichiers statiques
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
