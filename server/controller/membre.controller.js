@@ -2,7 +2,8 @@ const Membre = require("../models/membre.model");
 const Group = require("../models/group.model");
 const Role = require("../models/role.model");
 const User = require("../models/user.model");
-const { createNotification } = require("../utils/notification");
+//const { createNotification } = require("../utils/notification");
+const { notifyGroupEvent } = require("../utils/notification");
 
 const mongoose = require("mongoose");
 //const { isValidObjectId } = require("mongoose")
@@ -180,12 +181,11 @@ exports.addMembre = async (req, res) => {
       });
     }
 
-    await createNotification({
+    await notifyGroupEvent({
       userId: user_id,
       fromUserId: userId, // l'admin qui ajoute
-      type: "group",
       message: `Vous avez été ajouté au groupe : ${group.nom}`,
-      relatedId: group_id,
+      groupId: group_id,
     });
 
     res.status(201).json({
@@ -273,12 +273,11 @@ exports.updateMembreRole = async (req, res) => {
       });
     }
 
-    await createNotification({
+    await notifyGroupEvent({
       userId: membre.user_id,
       fromUserId: adminId,
-      type: "role",
       message: `Votre rôle a été modifié dans le groupe : ${membre.group_id}`,
-      relatedId: membre.group_id,
+      groupId: membre.group_id,
     });
 
     res.status(200).json({
@@ -369,12 +368,11 @@ exports.removeMembreFromGroup = async (req, res) => {
       });
     }
 
-    await createNotification({
+    await notifyGroupEvent({
       userId: membre.user_id,
       fromUserId: adminId,
-      type: "group",
       message: `Vous avez été retiré du groupe : ${membre.group_id}`,
-      relatedId: membre.group_id,
+      groupId: membre.group_id,
     });
 
     res.status(200).json({

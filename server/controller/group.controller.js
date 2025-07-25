@@ -6,7 +6,8 @@ const { isValidObjectId } = require("mongoose");
 const Conversation = require("../models/conversation.model");
 const Message = require("../models/message.model");
 const { getIO } = require("../socket/socket");
-const { createNotification } = require("../utils/notification");
+//const { createNotification } = require("../utils/notification");
+const { notifyGroupEvent } = require("../utils/notification");
 
 // Middleware pour verifier si l'utilisateur est admin
 const isAdmin = async (userId, groupId) => {
@@ -221,12 +222,12 @@ exports.updateGroup = async (req, res) => {
 
     for (const membre of membres) {
       if (membre.user_id._id.toString() !== adminId.toString()) {
-        await createNotification({
+        //createNotification avec type:group, relatedId: groupId
+        await notifyGroupEvent({
           userId: membre.user_id._id,
           fromUserId: adminId,
-          type: "group",
           message: `Le groupe ${populatedGroup.nom} a été modifié.`,
-          relatedId: groupId,
+          groupId: groupId,
         });
       }
     }

@@ -15,88 +15,103 @@ const NotificationContext = createContext();
 export const NotificationProvider = ({ children }) => {
   const { socket } = useSocket();
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Nouvel état pour la conversation active (private ou group)
+  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [activeGroupId, setActiveGroupId] = useState(null);
 
-  // Charger les notifications à la connexion
   // Charger les notifications non lues au chargement
-  /*useEffect(() => {
+  useEffect(() => {
     const fetchNotifications = async () => {
       try {
         const data = await notificationService.getNotifications();
         setNotifications(data || []);
       } catch {
         setNotifications([]);
-      } finally {
-        setLoading(false);
       }
     };
     fetchNotifications();
-  }, []); */
+  }, []);
 
-  // reception en temps reel
+  // Réception en temps réel
   useEffect(() => {
     if (!socket) return;
-
     const handleNotification = (notif) => {
-      setNotifications((prev) => [notif, ...prev]);
+      setNotifications((prev) => {
+        if (prev.some((n) => n._id === notif._id)) return prev;
+        return [notif, ...prev];
+      });
+      // Toast uniquement pour les messages privés, et si la conversation n'est PAS active
+      if (
+        notif.type === "message" &&
+        notif.relatedId !== activeConversationId
+      ) {
+        toast.info(notif.message);
+      }
+      // Pas de toast pour les autres types (group_message, group_event, calendar_event)
     };
-
     socket.on("notificationReceived", handleNotification);
     return () => {
-      socket.off("notificationReceived, handleNotification");
+      socket.off("notificationReceived", handleNotification);
     };
-  }, [socket]);
+  }, [socket, activeConversationId]);
 
-  // Ajouter une notification (ex: via socket)
-  const addNotification = useCallback((notif) => {
-    setNotifications((prev) => {
-      // Évite les doublons
-      if (prev.some((n) => n._id === notif._id)) return prev;
-      return [notif, ...prev];
-    });
-    // Toast pour les messages
-    if (notif.type === "message") {
-      toast.info(notif.message);
-    }
-  }, []);
+  // Helpers pour highlight et badges
+  const hasUnreadForConversation = useCallback(
+    (conversationId) =>
+      notifications.some(
+        (n) => n.type === "message" && n.relatedId === conversationId
+      ),
+    [notifications]
+  );
 
-  // Supprimer une notification précise
-  /*const deleteNotification = useCallback(async (id) => {
-    await notificationService.deleteNotification(id);
-    setNotifications((prev) => prev.filter((n) => n._id !== id));
-  }, []); */
+  const hasUnreadForGroup = useCallback(
+    (groupId) =>
+      notifications.some(
+        (n) => n.type === "group_message" && n.relatedId === groupId
+      ),
+    [notifications]
+  );
 
-  // Supprimer toutes les notifications (marquer comme lues)
-  const clearNotifications = useCallback(async () => {
-    try {
-      await notificationService.clearNotifications();
-      setNotifications([]);
-    } catch (error) {
-      console.error(
-        "Erreur lors de la suppression des notifications: ",
-        error.message
-      );
-      throw error;
-    }
-  }, []);
+  const hasUnreadForCalendar = useCallback(
+    () => notifications.some((n) => n.type === "calendar_event"),
+    [notifications]
+  );
 
-  // Nombre de notifications non lues
-  const unreadCount = notifications.length;
+  const hasUnreadForGroupEvent = useCallback(
+    (groupId) =>
+      notifications.some(
+        (n) => n.type === "group_event" && n.relatedId === groupId
+      ),
+    [notifications]
+  );
 
+  // Compteurs spécifiques pour les badges
+  const unreadMessageCount = notifications.filter(
+    (n) => n.type === "message"
+  ).length;
+  const unreadGroupMessageCount = notifications.filter(
+    (n) => n.type === "group_message"
+  ).length;
+  const unreadCalendarCount = notifications.filter(
+    (n) => n.type === "calendar_event"
+  ).length;
+  const unreadGroupEventCount = notifications.filter(
+    (n) => n.type === "group_event"
+  ).length;
+
+  // Marquer comme lu
   const markAsRead = useCallback(async (notifId) => {
-    try {
-      await notificationService.deleteNotification(notifId);
-      setNotifications((prev) => prev.filter((n) => n._id !== notifId));
-    } catch (error) {
-      console.error(
-        "Erreur lors de la suppression du notifications: ",
-        error.message
-      );
-      throw error;
-    }
+    await notificationService.deleteNotification(notifId);
+    setNotifications((prev) => prev.filter((n) => n._id !== notifId));
   }, []);
 
-  // clic sur une notification ( navigation /contexteul + suppression )
+  // Tout marquer comme lu
+  const clearNotifications = useCallback(async () => {
+    await notificationService.clearNotifications();
+    setNotifications([]);
+  }, []);
+
+  // Clic sur une notif
   const handleNotificationClick = useCallback(
     async (notif, onNavigate) => {
       if (onNavigate) onNavigate(notif);
@@ -105,33 +120,25 @@ export const NotificationProvider = ({ children }) => {
     [markAsRead]
   );
 
-  // Écoute socket pour les notifications temps réel
-  useEffect(() => {
-    if (!socket) return;
-    const onNotification = (notif) => {
-      addNotification(notif);
-    };
-    socket.on("notificationReceived", onNotification);
-    return () => {
-      socket.off("notificationReceived", onNotification);
-    };
-  }, [socket, addNotification]);
-
-  // Charger à la connexion
-  // useEffect(() => {
-  //   fetchNotifications();
-  // }, [fetchNotifications]);
-
   const contextValue = {
     notifications,
-    unreadCount,
-    loading,
-    addNotification,
-    clearNotifications,
+    unreadCount: notifications.length,
+    unreadMessageCount,
+    unreadGroupMessageCount,
+    unreadCalendarCount,
+    unreadGroupEventCount,
+    hasUnreadForConversation,
+    hasUnreadForGroup,
+    hasUnreadForCalendar,
+    hasUnreadForGroupEvent,
     markAsRead,
+    clearNotifications,
     handleNotificationClick,
-    //deleteNotification,
-    // fetchNotifications,
+    // Pour permettre aux composants de définir la conversation active
+    setActiveConversationId,
+    setActiveGroupId,
+    activeConversationId,
+    activeGroupId,
   };
 
   return (
@@ -145,11 +152,4 @@ NotificationProvider.propTypes = {
   children: PropTypes.node.isRequired,
 };
 
-export const useNotification = () => {
-  const context = useContext(NotificationContext);
-  if (!context)
-    throw new Error(
-      "useNotification doit être utilisé dans un NotificationProvider"
-    );
-  return context;
-};
+export const useNotification = () => useContext(NotificationContext);

@@ -2,7 +2,11 @@ const Message = require("../models/message.model");
 const Conversation = require("../models/conversation.model");
 const Fichier = require("../models/fichier.model");
 const Membre = require("../models/membre.model");
-const { createNotification } = require("../utils/notification");
+//const { createNotification } = require("../utils/notification");
+const {
+  notifyPrivateMessage,
+  notifyGroupMessage,
+} = require("../utils/notification");
 
 const path = require("path");
 const fs = require("fs");
@@ -167,12 +171,12 @@ exports.createMessage = async (req, res) => {
         conversation.sender_id.toString() === user_id.toString()
           ? conversation.receiver_id
           : conversation.sender_id;
-      await createNotification({
+      //createNotification de niampy fotsiny type: message , relatedId: newMessage._id
+      await notifyPrivateMessage({
         userId: receiverId,
         fromUserId: user_id,
-        type: "message",
         message: `Nouveau message de ${req.user.pseudo || req.user.nom}`,
-        relatedId: newMessage._id,
+        conversationId: conversation._id || conversation_id,
       });
     } else if (conversation.type === "group") {
       // Notifier tous les membres du groupe sauf l'auteur
@@ -185,12 +189,12 @@ exports.createMessage = async (req, res) => {
       for (const membre of membres) {
         const membreUserId = membre.user_id.toString();
         if (membreUserId !== user_id.toString()) {
-          const notif = await createNotification({
+          // taloha teto createNotification de niampy fotsiny type: message , relatedId: newMessage._id
+          const notif = await notifyGroupMessage({
             userId: membreUserId,
             fromUserId: user_id, // user qui est l'auteur du message
-            type: "message",
             message: `Nouveau message dans le groupe : ${conversation_id.group_id?.nom}`,
-            relatedId: newMessage._id,
+            groupId: conversation_id.group_id?._id || conversation_id.group_id,
           });
 
           if (!notif) {

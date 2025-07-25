@@ -14,16 +14,16 @@ const NotificationList = ({ notifications, onNotificationClick }) => {
         <li
           key={notif._id || index}
           onClick={() => onNotificationClick(notif)}
-          className="p-3 rounded-lg cursor-pointer bg-blue-200 hover:blue-300"
+          className="p-2 rounded-md hover:rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100"
         >
           <div className="flex items-center gap-2">
             {/* <span className="text-xl">{getNotificationIcon(notif.type)}</span> */}
-            <div className="flex-1">
+            <div className="flex-1 pl-2">
               <p className="text-sm">{notif.message}</p>
 
               <div className="flex justify-between items-center mt-1">
                 <span className="text-xs text-gray-500">
-                  {format(new Date(notif.createdAt), "dd/MM/yyyy")}
+                  {format(new Date(notif.createdAt), "dd-MM-yyyy")}
                 </span>
               </div>
             </div>

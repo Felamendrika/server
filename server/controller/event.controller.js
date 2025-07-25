@@ -3,7 +3,7 @@ const User = require("../models/user.model");
 const Participant = require("../models/participant.model");
 const Group = require("../models/group.model");
 const Membre = require("../models/membre.model");
-const { createNotification } = require("../utils/notification");
+const { notifyCalendarEvent } = require("../utils/notification");
 
 const { isValidObjectId } = require("mongoose");
 const { getIO } = require("../socket/socket");
@@ -143,12 +143,11 @@ exports.createEvent = async (req, res) => {
       // Notifier tous les utilisateurs sauf le créateur
       const allUsers = await User.find({ _id: { $ne: createur_id } });
       for (const user of allUsers) {
-        await createNotification({
+        await notifyCalendarEvent({
           userId: user._id,
           fromUserId: createur_id,
-          type: "event",
           message: `Nouvel événement public : ${titre}`,
-          relatedId: newEvent._id,
+          eventId: newEvent._id,
         });
       }
     }
@@ -818,9 +817,7 @@ exports.updateEvent = async (req, res) => {
         },
       };
 
-      io.emit("eventModified", {
-        event: eventPayload,
-      });
+      io.emit("eventModified", { event: eventPayload });
       // eventId: eventId, //updatedEvent._id
     } else {
       console.error("Socket.IO non initialisé");
@@ -911,10 +908,7 @@ exports.deleteEvent = async (req, res) => {
     // socket
     const io = getIO();
     if (io) {
-      io.emit("eventRemoved", {
-        eventId: eventId,
-        message: "Événement supprimé",
-      });
+      io.emit("eventRemoved", { eventId, message: "Événement supprimé" });
     } else {
       console.error("Socket.IO non initialisé");
       return res.status(500).json({
