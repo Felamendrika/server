@@ -36,6 +36,7 @@ export const NotificationProvider = ({ children }) => {
   useEffect(() => {
     if (!socket) return;
     const handleNotification = (notif) => {
+      console.log("[SOCKET][Notification] Reçue:", notif); // DEBUG
       setNotifications((prev) => {
         if (prev.some((n) => n._id === notif._id)) return prev;
         return [notif, ...prev];

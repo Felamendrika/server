@@ -8,7 +8,7 @@ const { notifyGroupEvent } = require("../utils/notification");
 const mongoose = require("mongoose");
 //const { isValidObjectId } = require("mongoose")
 
-const { getIO } = require("../socket/socket");
+const { getIO, getUserSocketId } = require("../socket/socket");
 
 const isAdminOfGroup = async (groupId, userId) => {
   const adminRole = await Role.findOne({ type: "admin" }).select("_id");
@@ -184,7 +184,7 @@ exports.addMembre = async (req, res) => {
     await notifyGroupEvent({
       userId: user_id,
       fromUserId: userId, // l'admin qui ajoute
-      message: `Vous avez été ajouté au groupe : ${group.nom}`,
+      message: `Vous avez été ajouté au groupe : "${group.nom}"`,
       groupId: group_id,
     });
 
@@ -274,10 +274,10 @@ exports.updateMembreRole = async (req, res) => {
     }
 
     await notifyGroupEvent({
-      userId: membre.user_id,
+      userId: membre.user_id._id,
       fromUserId: adminId,
-      message: `Votre rôle a été modifié dans le groupe : ${membre.group_id}`,
-      groupId: membre.group_id,
+      message: `Votre rôle a été modifié dans le groupe : ${membre.group_id.nom}`,
+      groupId: membre.group_id._id,
     });
 
     res.status(200).json({
@@ -371,7 +371,7 @@ exports.removeMembreFromGroup = async (req, res) => {
     await notifyGroupEvent({
       userId: membre.user_id,
       fromUserId: adminId,
-      message: `Vous avez été retiré du groupe : ${membre.group_id}`,
+      message: `Vous avez été retiré du groupe : ${membre.group_id.nom}`,
       groupId: membre.group_id,
     });
 
@@ -571,15 +571,40 @@ exports.leaveGroup = async (req, res) => {
       });
     }
 
+    // Récupérer les informations du groupe et du membre pour les notifications
+    const group = await Group.findById(groupId).select("nom");
+    const user = await User.findById(userId).select("nom prenom pseudo");
+
     const io = getIO();
-    // Notifier via socket
-    // if (io) {
-    //   io.to(`group_${group_id}`).emit("membreLeftGroup", {
-    //     groupId,
-    //     userId,
-    //     message: "Un membre a quitté le groupe",
-    //   });
-    // }
+    if (io) {
+      // Émettre l'événement de départ du groupe
+      io.to(`group_${groupId}`).emit("membreLeftGroup", {
+        groupId,
+        userId,
+        message: "Un membre a quitté le groupe",
+      });
+
+      // Retirer le membre de la room du groupe
+      const socketId = getUserSocketId(userId.toString());
+      if (socketId) {
+        io.sockets.sockets.get(socketId)?.leave(`group_${groupId}`);
+      }
+    }
+
+    // Notifier les autres membres du groupe
+    const autresMembres = await Membre.find({
+      group_id: groupId,
+      user_id: { $ne: userId },
+    }).populate("user_id", "_id");
+
+    for (const autreMembre of autresMembres) {
+      await notifyGroupEvent({
+        userId: autreMembre.user_id._id,
+        fromUserId: userId,
+        message: `${user.pseudo || user.nom} a quitté le groupe : ${group.nom}`,
+        groupId: groupId,
+      });
+    }
 
     return res.status(200).json({
       succes: true,

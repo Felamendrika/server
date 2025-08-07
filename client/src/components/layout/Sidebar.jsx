@@ -22,7 +22,12 @@ const Sidebar = () => {
   const { clearConversationState, fetchPrivateConversations } = useMessage();
   const { fetchEvents } = useEvent();
   const { fetchUserGroups, setCurrentGroup } = useGroup();
-  const { notifications } = useNotification();
+  const {
+    unreadMessageCount,
+    unreadGroupMessageCount,
+    unreadGroupEventCount,
+    unreadCalendarCount,
+  } = useNotification();
   const [activePage, setActivePage] = useState("messages");
   // const navigate = useNavigate();
   const location = useLocation();
@@ -71,31 +76,28 @@ const Sidebar = () => {
     logout();
   };
 
-  // determine si les notifications concerne les messages ou groupes
-  const hasMessageNotif = notifications.some((n) => n.type === "message");
-  const hasGroupNotif = notifications.some((n) => n.type === "group");
-  // const hasEventNotif = notifications.some((n) => n.type === "event")
-
+  // Nouvelle logique pour les badges (point rouge)
   const menuItems = [
     {
       name: "Messages",
       icon: <TfiCommentAlt />,
       path: "/dashboard/messages",
       id: "messages",
-      badge: hasMessageNotif,
-    }, //,onClick: handleNavigation
+      badge: unreadMessageCount > 0,
+    },
     {
       name: "Groupes",
       icon: <PiUsers />,
       path: "/dashboard/groups",
       id: "groups",
-      badge: hasGroupNotif,
+      badge: unreadGroupMessageCount > 0 || unreadGroupEventCount > 0,
     },
     {
       name: "Calendrier Partagé",
       icon: <BsCalendar2Event />,
       path: "/dashboard/calendrier",
       id: "calendar",
+      badge: unreadCalendarCount > 0,
     },
   ];
   return (

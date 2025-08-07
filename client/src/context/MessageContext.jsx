@@ -51,8 +51,6 @@ export const MessageProvider = ({ children }) => {
       const { conversation = [] } = await getUserPrivateConversation();
       // const { conversation } = await getUserPrivateConversation()
       setConversations(Array.isArray(conversation) ? conversation : []);
-      // setConversations(conversation || [])
-      // console.log("Conversation filtrer ", conversation)
     } catch (error) {
       console.error(
         "Erreur lors du chargement des conversations privee de l'utilisateur connecter: ",
@@ -511,10 +509,6 @@ export const MessageProvider = ({ children }) => {
       console.log(response?.fichiers);
       if (response && response?.fichiers) {
         setFichiers(response.fichiers);
-        // socket?.emit("conversationFilesUpdated", {
-        //     fichiers: response.fichiers,
-        //     conversationId
-        // })
       } else {
         console.error("Aucune liste de fichiers récupérée");
         setFichiers([]);

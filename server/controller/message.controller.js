@@ -89,7 +89,10 @@ exports.createMessage = async (req, res) => {
     }
 
     // Verification de l'existance de la conversation et de l'user
-    const conversation = await Conversation.findById(conversation_id);
+    const conversation = await Conversation.findById(conversation_id).populate(
+      "group_id",
+      "nom"
+    );
 
     if (!conversation) {
       return res.status(404).json({
@@ -175,12 +178,12 @@ exports.createMessage = async (req, res) => {
       await notifyPrivateMessage({
         userId: receiverId,
         fromUserId: user_id,
-        message: `Nouveau message de ${req.user.pseudo || req.user.nom}`,
+        message: `Nouveau message de "${req.user.pseudo || req.user.nom}"`,
         conversationId: conversation._id || conversation_id,
       });
     } else if (conversation.type === "group") {
       // Notifier tous les membres du groupe sauf l'auteur
-      const membres = await Membre.find({ group_id: conversation_id.group_id });
+      const membres = await Membre.find({ group_id: conversation.group_id });
 
       if (!membres || membres.length === 0) {
         console.error("Aucun membre trouver dans la conversation a notifier");
@@ -193,8 +196,9 @@ exports.createMessage = async (req, res) => {
           const notif = await notifyGroupMessage({
             userId: membreUserId,
             fromUserId: user_id, // user qui est l'auteur du message
-            message: `Nouveau message dans le groupe : ${conversation_id.group_id?.nom}`,
-            groupId: conversation_id.group_id?._id || conversation_id.group_id,
+            message: `Nouveau message dans le groupe : ${conversation.group_id?.nom}`,
+            groupId: conversation.group_id?._id || conversation.group_id,
+            // Pb teto lasa notification_id.group_id no napesaina nefa tokony conversation.group_id
           });
 
           if (!notif) {

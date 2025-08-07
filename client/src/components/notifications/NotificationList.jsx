@@ -23,7 +23,7 @@ const NotificationList = ({ notifications, onNotificationClick }) => {
 
               <div className="flex justify-between items-center mt-1">
                 <span className="text-xs text-gray-500">
-                  {format(new Date(notif.createdAt), "dd-MM-yyyy")}
+                  {format(new Date(notif.createdAt), "dd-MM-yyyy HH:mm")}
                 </span>
               </div>
             </div>

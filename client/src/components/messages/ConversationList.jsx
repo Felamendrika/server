@@ -29,8 +29,12 @@ const ConversationList = () => {
     loading,
   } = useMessage();
 
-  const { hasUnreadForConversation, notifications, markAsRead } =
-    useNotification();
+  const {
+    hasUnreadForConversation,
+    notifications,
+    markAsRead,
+    setActiveConversationId,
+  } = useNotification();
 
   const { socket } = useSocket(); // Modification ici
   const { isUserOnline } = useConnection();
@@ -98,11 +102,19 @@ const ConversationList = () => {
     }
 
     setCurrentConversation(conversation);
+    setActiveConversationId(conversation._id); // Notifier le contexte notification
     await fetchConversationMessages(conversation._id);
-    // markConversationAsRead(conversation._id)
-
     socket?.emit("joinConversation", conversation._id);
   };
+
+  // Met à jour la conversation active dans le contexte notification
+  useEffect(() => {
+    if (currentConversation?._id) {
+      setActiveConversationId(currentConversation._id);
+    } else {
+      setActiveConversationId(null);
+    }
+  }, [currentConversation, setActiveConversationId]);
 
   const filteredConversations =
     conversations.filter((conversation) =>
@@ -189,11 +201,14 @@ const ConversationList = () => {
                     )
                     .forEach((n) => markAsRead(n._id));
                 }}
-                className={`flex w-full items-center p-2 hover:bg-gray-100 hover:rounded-md cursor-pointer ${
-                  currentConversation?._id === conversation._id
-                    ? "bg-gray-100 border-l-8 border-yellow-100 rounded-md "
-                    : "bg-gray-50"
-                }`}
+                className={`flex w-full items-center p-2 hover:bg-gray-100 hover:rounded-md cursor-pointer
+                    ${
+                      currentConversation?._id === conversation._id
+                        ? "bg-gray-100 border-l-8 border-yellow-100 rounded-md "
+                        : // : hasUnreadForConversation(conversation._id)
+                          // ? "bg-yellow-50 border-l-8 border-yellow-400 rounded-md font-bold"
+                          "bg-gray-50"
+                    }`}
               >
                 {/* Avatar */}
                 <img
@@ -208,10 +223,10 @@ const ConversationList = () => {
                     <span className="font-medium text-sm text-gray-800 truncate overflow-clip">
                       {conversation.otherParticipant?.pseudo ||
                         "Utilisateur inconnu"}
+                      {hasUnreadForConversation(conversation._id) && (
+                        <span className="ml-2 w-2 h-2 bg-red-500 rounded-full inline-block"></span>
+                      )}
                     </span>
-                    {hasUnreadForConversation(conversation._id) && (
-                      <span className="ml-2 w-2 h-2 bg-red-500 rounded-full inline-block"></span>
-                    )}
                   </div>
                   <p
                     className={`text-xs text-gray-600 truncate overflow-clip

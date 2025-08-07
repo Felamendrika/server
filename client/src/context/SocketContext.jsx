@@ -35,7 +35,7 @@ export const SocketProvider = ({ children }) => {
         newSocket.emit("userConnected");
         newSocket.emit("getOnlineUsers");
       });
-
+      
       // Gestion des erreurs de connexion
       newSocket.on("connect_error", (error) => {
         console.error("Erreur de connexion socket:", error);
@@ -76,7 +76,7 @@ export const SocketProvider = ({ children }) => {
       });
 
       newSocket.on("conversationRemoved", (data) => {
-        console.log("Conversation privée supprimée:", data);
+          console.log("Conversation privée supprimée:", data);
       });
 
       // GESTION DE GROUPE
@@ -109,7 +109,7 @@ export const SocketProvider = ({ children }) => {
       })*/
 
       newSocket.on("groupConversationRemoved", (data) => {
-        console.log("Conversation de groupe supprimée:", data);
+          console.log("Conversation de groupe supprimée:", data);
       });
 
       newSocket.on("newFile", (data) => {
@@ -125,64 +125,64 @@ export const SocketProvider = ({ children }) => {
       });
 
       // Ajout des événements du calendrier
-      newSocket.on("newEvent", (data) => {
+    newSocket.on("newEvent", (data) => {
         if (data && data.event) {
-          console.log("Nouvel événement reçu:", data.event);
+            console.log("Nouvel événement reçu:", data.event);
         }
-      });
+    });
 
-      newSocket.on("eventModified", (data) => {
+    newSocket.on("eventModified", (data) => {
         if (data && data.event) {
-          console.log("Événement modifié reçu:", data.event);
+            console.log("Événement modifié reçu:", data.event);
         }
-      });
+    });
 
-      newSocket.on("eventRemoved", (data) => {
+    newSocket.on("eventRemoved", (data) => {
         if (data && data.eventId) {
-          console.log("Événement supprimé reçu:", data.eventId);
+            console.log("Événement supprimé reçu:", data.eventId);
         }
-      });
+    });
 
       // newSocket.on("newMessageNotification", (data) => {
       //   setNotifications(prev => [data, ...prev]);
       //   setUnreadMessages(prev => new Set(prev).add(data.conversationId))
       //   setHasNewMessages(true);
       // })
-
+      
       newSocket.on("disconnected", () => {
         console.log("Déconnecté du Socket");
         // setIsConnected(false);
       });
 
-      setSocket(newSocket);
-      return () => {
-        newSocket.off("connect");
-        newSocket.off("disconnect");
-        // newSocket.off("updateOnlineUsers");
-        // newSocket.off("userOnline");
-        // newSocket.off("userOffline");
-        newSocket.off("conversationUpdated");
-        newSocket.off("conversationCreated");
-        newSocket.off("conversationRemoved");
-        newSocket.off("groupConversationRemoved");
-        newSocket.off("messageReceived");
-        newSocket.off("messageModified");
-        newSocket.off("messageDeleted");
+    setSocket(newSocket);
+    return () => {
+          newSocket.off("connect");
+          newSocket.off("disconnect");
+          // newSocket.off("updateOnlineUsers");
+          // newSocket.off("userOnline");
+          // newSocket.off("userOffline");
+          newSocket.off("conversationUpdated");
+          newSocket.off("conversationCreated");
+          newSocket.off("conversationRemoved");
+          newSocket.off("groupConversationRemoved");
+          newSocket.off("messageReceived");
+          newSocket.off("messageModified");
+          newSocket.off("messageDeleted");
         newSocket.off("newGroup");
-        newSocket.off("updatedGroup");
-        newSocket.off("removeGroup");
+          newSocket.off("updatedGroup");
+          newSocket.off("removeGroup");
         newSocket.off("joinedGroup");
         newSocket.off("groupMemberAdded");
-        newSocket.off("newFile");
-        newSocket.off("fileRemoved");
-        newSocket.off("refreshConversationFiles");
-        newSocket.off("eventCreated");
-        newSocket.off("eventModified");
-        newSocket.off("eventRemoved");
+          newSocket.off("newFile");
+          newSocket.off("fileRemoved");
+          newSocket.off("refreshConversationFiles");
+          newSocket.off("eventCreated");
+          newSocket.off("eventModified");
+          newSocket.off("eventRemoved");
         setSocket(null);
-        newSocket.disconnect();
+          newSocket.disconnect();
       };
-    }
+      }
   }, [updateOnlineUsers, addOnlineUser, removeOnlineUser]);
 
   // Vérification du statut en ligne
@@ -193,11 +193,11 @@ export const SocketProvider = ({ children }) => {
   // Fonctions utilitaires pour l'émission d'événements
   const emitEvent = useCallback(
     (eventName, data) => {
-      if (socket && socket.connected) {
-        socket.emit(eventName, data);
-      } else {
-        console.warn("Socket non connecté. Impossible d'émettre:", eventName);
-      }
+    if (socket && socket.connected) {
+      socket.emit(eventName, data);
+    } else {
+      console.warn("Socket non connecté. Impossible d'émettre:", eventName);
+    }
     },
     [socket]
   );
@@ -224,7 +224,7 @@ export const SocketProvider = ({ children }) => {
     },*/
     emitGroupCreated: (data) => {
       emitEvent("groupCreated", data);
-    },
+    }, 
     emitGroupModified: (data) => {
       emitEvent("groupModified", data);
     },
@@ -282,16 +282,16 @@ export const SocketProvider = ({ children }) => {
 
 export const useSocket = () => {
   const context = useContext(SocketContext);
-  if (!context) {
+    if (!context) {
     throw new Error("useSocket doit etre utiliser dans un SocketProvider");
-  }
+    }
   return context;
 };
 
 export default SocketProvider;
 
-// maj des users en ligne
-/*newSocket.on("updateOnlineUsers", (users) => {
+      // maj des users en ligne
+      /*newSocket.on("updateOnlineUsers", (users) => {
         console.log("Users online:", users);
         setOnlineUsers(new Set(users));
         // setOnlineUsers(users);

@@ -11,7 +11,7 @@ import { useNotification } from "../../context/NotificationContext";
 const NavBar = () => {
   const [isNotificationOpen, setNotificationOpen] = useState(false);
   const [isUserModal, setUserModal] = useState(false);
-  const { notifications } = useNotification();
+  const { unreadCount } = useNotification();
 
   const toggleNotification = () => {
     setNotificationOpen(!isNotificationOpen);
@@ -34,7 +34,7 @@ const NavBar = () => {
             onClick={toggleNotification}
             className="text-2xl cursor-pointer hover:text-gray-700"
           />
-          <NotificationBadge show={notifications.length > 0} />
+          <NotificationBadge show={unreadCount > 0} />
           {/* {notifications.length > 0 && (
                     <span className='absolute top-0 right-0 bg-red-500 rounded-full px-1 text-xs'>
                         {notifications.length}

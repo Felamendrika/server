@@ -36,8 +36,13 @@ const GroupConversation = () => {
     loading,
   } = useMessage();
 
-  const { currentGroup, setCurrentGroup, deleteGroup, updateGroupLastMessage } =
-    useGroup();
+  const {
+    currentGroup,
+    membres,
+    setCurrentGroup,
+    deleteGroup,
+    updateGroupLastMessage,
+  } = useGroup();
 
   const { socket } = useSocket();
 
@@ -264,6 +269,10 @@ const GroupConversation = () => {
     );
   }
 
+  // VERIFICATION SI LE MEMBRE EXISTE ENCORE DANS LE GROUPE
+  const isStillMembre = (userId) =>
+    membres?.some((m) => m.user_id._id === userId);
+
   /* if (!currentConversation) {
       return <div className="h-full min-w-[70%] flex flex-col bg-gray-50 border-black rounded-lg pb-4 shadow-sm overflow-hidden text-center text-gray-500 justify-center">Sélectionnez une conversation pour afficher les messages.</div>;
     }*/
@@ -307,14 +316,22 @@ const GroupConversation = () => {
           className="flex-1 max-h-[90%] space-y-4 p-4 overflow-y-auto pr-1 custom-scrollbar"
         >
           {messages.map((msg) => {
-            const isUserMessage = !currentConversation?.otherParticipants?.some(
-              (p) => p?._id === msg?.user_id?._id
-            );
+            const stillMembre = isStillMembre(msg?.user_id?._id);
 
-            const messageParticipant =
-              currentConversation?.otherParticipants?.find(
-                (p) => p?._id === msg?.user_id?._id
-              );
+            // Si auteur n'est plus membre, affichage de "autre" (gauche,bulle jaune)
+            // differenciation des messages de l'utilisateur aux autres messages ( asorona fotsiny leh stillMembre si false rah misy bug)
+            const isUserMessage = stillMembre
+              ? !currentConversation?.otherParticipants?.some(
+                  (p) => p?._id === msg?.user_id?._id
+                )
+              : false;
+
+            // Si membre, on recupere ses infos , sinon null
+            const messageParticipant = stillMembre
+              ? currentConversation?.otherParticipants?.find(
+                  (p) => p?._id === msg?.user_id?._id
+                )
+              : null;
             return (
               <div
                 key={msg._id}
@@ -322,11 +339,22 @@ const GroupConversation = () => {
                   isUserMessage ? "justify-end" : "justify-start"
                 }`}
               >
-                {!isUserMessage && messageParticipant && (
+                {/* !isUserMessage && messageParticipant && */}
+                {!isUserMessage && (
                   <div className="flex flex-col items-center mr-1 mt-2">
                     <img
-                      src={messageParticipant?.avatar || userAvatar}
-                      alt={messageParticipant?.pseudo || "image"}
+                      // messageParticipant?.avatar || userAvatar
+                      src={
+                        stillMembre && messageParticipant?.avatar
+                          ? messageParticipant?.avatar
+                          : userAvatar
+                      }
+                      // messageParticipant?.pseudo || "image"
+                      alt={
+                        stillMembre && messageParticipant?.pseudo
+                          ? messageParticipant.pseudo
+                          : "Utilisateur supprimé"
+                      }
                       className="w-8 h-8 rounded-full object-cover"
                     />
                   </div>
@@ -336,9 +364,13 @@ const GroupConversation = () => {
                     isUserMessage ? "items-end" : "items-start"
                   }`}
                 >
-                  {!isUserMessage && messageParticipant && (
+                  {/* messageParticipant && */}
+                  {!isUserMessage && (
                     <span className="text-xs text-gray-600 mt-1">
-                      {messageParticipant?.pseudo || "Utilisateur"}
+                      {/* messageParticipant?.pseudo || "Utilisateur" */}
+                      {stillMembre && messageParticipant?.pseudo
+                        ? messageParticipant.pseudo
+                        : "Utilisateur supprimé"}
                     </span>
                   )}
                   <div
@@ -401,7 +433,7 @@ const GroupConversation = () => {
                       isUserMessage ? "justify-end mr-2" : "justify-start ml-2"
                     }`}
                   >
-                    {isUserMessage && !msg.isDeleted && (
+                    {isUserMessage && !msg.isDeleted && stillMembre && (
                       <button
                         onClick={() => toggleDropdown(msg._id)}
                         className={`absolute top-1 text-gray-500 hover:text-gray-700 ${
