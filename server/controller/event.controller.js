@@ -450,30 +450,57 @@ exports.getEventById = async (req, res) => {
 exports.getFilteredEvents = async (req, res) => {
   try {
     const { type } = req.query;
-    const createur_id = req.user?._id || req.user?.id;
+    const userId = req.user?._id || req.user?.id;
 
+    // Vérification du type demandé
     if (!["public", "private", "group"].includes(type)) {
       return res.status(400).json({
         message: "Type d''événement invalide",
       });
     }
 
-    let events;
+    let events = [];
     if (type === "public") {
+      // Tous les événements publics
       events = await Event.find({ type: "public" });
     } else if (type === "private") {
-      events = await Event.find({ type: "private", createur_id: createur_id });
-    } else {
-      events = await Event.find({ type: "group" }).populate("group_id", "nom");
+      // Événements privés créés par l'utilisateur
+      const created = await Event.find({
+        type: "private",
+        createur_id: userId,
+      });
+      // Événements privés où l'utilisateur est participant
+      const participatingIds = await Participant.find({
+        user_id: userId,
+      }).distinct("event_id");
+      const participating = await Event.find({
+        _id: { $in: participatingIds },
+        type: "private",
+      });
+      // Fusionner sans doublons
+      const map = new Map();
+      [...created, ...participating].forEach((evt) =>
+        map.set(String(evt._id), evt)
+      );
+      events = Array.from(map.values());
+    } else if (type === "group") {
+      // Événements de groupes dont l'utilisateur est membre
+      const groupIds = await Membre.find({ user_id: userId }).distinct(
+        "group_id"
+      );
+      events = await Event.find({
+        type: "group",
+        group_id: { $in: groupIds },
+      }).populate("group_id", "nom");
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Voici les evenements recuperer selon le filtre :",
       data: events,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Erreur serveur lors de la récupération des événements filterer",
       error: error.message,

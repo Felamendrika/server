@@ -15,10 +15,10 @@ import PartcipantList from "./PartcipantList";
 import ParticipantModal from "./ParticipantModal";
 
 const EventForm = ({ onClose, selectedEvent }) => {
-  const { 
-    createEvent, 
+  const {
+    createEvent,
     createEventWithParticipants,
-    updateEvent, 
+    updateEvent,
     deleteEvent,
     eventParticipants,
     fetchEventParticipants,
@@ -359,21 +359,21 @@ const EventForm = ({ onClose, selectedEvent }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">        
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-gray-50 rounded-lg p-4 w-[600px] max-h-[90vh] overflow-y-auto flex flex-col">
         <div className="relative p-2">
-                <IoIosCloseCircleOutline 
-                onClick={onClose}
-                size={25}
+          <IoIosCloseCircleOutline
+            onClick={onClose}
+            size={25}
             className="absolute top-3 right-4 text-gray-400 cursor-pointer hover:text-gray-600"
-              />
-          </div>   
+          />
+        </div>
 
-          <h2 className="text-2xl font-bold mb-4">
+        <h2 className="text-2xl font-bold mb-4">
           {selectedEvent ? "Modifier l'événement" : "Créer un événement"}
-          </h2>
+        </h2>
 
-          {selectedEvent && selectedEvent.createur_id && (
+        {selectedEvent && selectedEvent.createur_id && (
           <div className="flex items-center gap-3 mb-3 p-2 bg-blue-50 rounded-lg">
             <p className="block font-medium">Créateur de l&apos;événement: </p>
             <img
@@ -387,7 +387,7 @@ const EventForm = ({ onClose, selectedEvent }) => {
               </p>
             </div>
           </div>
-          )}
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Titre */}
@@ -511,18 +511,18 @@ const EventForm = ({ onClose, selectedEvent }) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-medium mb-2">Date de début *</label>
-              <input 
+              <input
                 type="datetime-local"
                 name="date_debut"
                 value={eventData.date_debut}
-                onChange={handleChange} 
+                onChange={handleChange}
                 required
                 className="w-full p-2 border bg-white border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
             </div>
             <div>
               <label className="block font-medium mb-2">Date de fin *</label>
-              <input 
+              <input
                 type="datetime-local"
                 name="date_fin"
                 value={eventData.date_fin}
@@ -535,9 +535,9 @@ const EventForm = ({ onClose, selectedEvent }) => {
 
           {/* Boutons d'action */}
           <div className="flex justify-center gap-3 pt-4 border-t">
-            <button 
+            <button
               type="button"
-              onClick={onClose} 
+              onClick={onClose}
               className="px-6 py-2 border-2 rounded-md hover:bg-gray-200 active:bg-gray-300 transition-colors"
               disabled={loading}
             >
@@ -572,14 +572,14 @@ const EventForm = ({ onClose, selectedEvent }) => {
         </form>
 
         {/* Modals */}
-        <ConfirmDeleteModal 
+        <ConfirmDeleteModal
           isOpen={isDeleteModalOpen}
           onClose={() => setIsDeleteModalOpen(false)}
           onConfirm={handleDelete}
           message="Êtes-vous sûr de vouloir supprimer l'événement ?"
         />
 
-        <ConfirmActionModal 
+        <ConfirmActionModal
           isOpen={isConfirmModalOpen}
           onClose={() => setIsConfirmModalOpen(false)}
           onConfirm={handleUpdate}
@@ -599,4 +599,3 @@ const EventForm = ({ onClose, selectedEvent }) => {
 };
 
 export default EventForm;
-

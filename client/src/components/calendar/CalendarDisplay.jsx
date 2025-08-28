@@ -43,7 +43,8 @@ const CalendarDisplay = () => {
           "Erreur lors de la récupération des evenements : ",
           error
         );
-        toast("Impossible de charger les evenements");
+        // Suppression du toast pour éviter les alertes inutiles
+        // toast("Impossible de charger les evenements");
       }
     };
     fetchData();
@@ -94,7 +95,8 @@ const CalendarDisplay = () => {
         await fetchFilteredEvents(type);
       } catch (error) {
         console.error(`Erreur lors du filtrage des événements ${type}:`, error);
-        toast.error(`Impossible de charger les événements ${type}`);
+        // Suppression du toast pour éviter les alertes inutiles
+        // toast.error(`Impossible de charger les événements ${type}`);
       }
     }
   };
