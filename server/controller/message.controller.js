@@ -15,13 +15,42 @@ const { isValidObjectId } = require("mongoose");
 
 const { getIO } = require("../socket/socket");
 
+// types de fichiers autorise
+const ALLOWED_FILE_TYPES = [
+  "pdf",
+  "image",
+  "word",
+  "excel",
+  "powerpoint",
+  "text",
+  "document",
+  "application",
+  "archive",
+  "code",
+  "design",
+  "database",
+  "spreadsheet",
+  "presentation",
+  "graphics",
+];
+
 // Fonction utilitaire pour obtenir le type de fichier
 const getFileType = (mimetype) => {
   const mapping = {
+    // Documents PDF
     "application/pdf": "pdf",
+
+    // Images
     "image/jpeg": "image",
     "image/jpg": "image",
     "image/png": "image",
+    "image/gif": "image",
+    "image/webp": "image",
+    "image/bmp": "image",
+    "image/tiff": "image",
+    "image/svg+xml": "image",
+
+    // Documents Microsoft Office
     "application/msword": "word",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
       "word",
@@ -33,27 +62,76 @@ const getFileType = (mimetype) => {
       "powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.slideshow":
       "powerpoint",
+
+    // Documents OpenDocument
+    "application/vnd.oasis.opendocument.text": "word",
+    "application/vnd.oasis.opendocument.spreadsheet": "excel",
+    "application/vnd.oasis.opendocument.presentation": "powerpoint",
+    "application/vnd.oasis.opendocument.graphics": "graphics",
+
+    // Fichiers texte et code
     "text/plain": "text",
+    "text/html": "code",
+    "text/css": "code",
+    "text/javascript": "code",
+    "text/xml": "code",
+    "application/json": "code",
+    "application/xml": "code",
+    "application/javascript": "code",
+    "application/typescript": "code",
+
+    // Archives
+    "application/zip": "archive",
+    "application/x-rar-compressed": "archive",
+    "application/x-7z-compressed": "archive",
+    "application/x-tar": "archive",
+    "application/gzip": "archive",
+    "application/x-bzip2": "archive",
+
+    // Fichiers de design et graphiques
+    "application/postscript": "design",
+    "application/illustrator": "design",
+    "application/photoshop": "design",
+    "image/vnd.adobe.photoshop": "design",
+    "application/x-photoshop": "design",
+
+    // Fichiers de base de données
+    "application/x-sql": "database",
+    "application/x-database": "database",
+    "application/vnd.ms-access": "database",
+
+    // Fichiers de développement
+    "application/x-python": "code",
+    "application/x-java": "code",
+    "application/x-c++": "code",
+    "application/x-csharp": "code",
+    "text/x-python": "code",
+    "text/x-java-source": "code",
+    "text/x-c++src": "code",
+    "text/x-csharp": "code",
   };
   return mapping[mimetype] || "application";
 };
 
-// types de fichiers autorise
-const ALLOWED_FILE_TYPES = [
-  "pdf",
-  "image",
-  "word",
-  "excel",
-  "powerpoint",
-  "text",
-  "document",
-  "application",
-];
-
 // Fonction utilitaire pour supprimer un fichier un fichier physique
-const deletePhysicalFile = (filePath) => {
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+const deletePhysicalFile = async (filePath) => {
+  try {
+    if (!filePath) {
+      console.error("Chemin de fichier non fourni");
+      return false;
+    }
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log("Fichier physique supprimé avec succès:", filePath);
+      return true;
+    } else {
+      console.log("Fichier physique déjà supprimé ou introuvable:", filePath);
+      return false;
+    }
+  } catch (error) {
+    console.error("Erreur lors de la suppression du fichier physique:", error);
+    return false;
   }
 };
 
@@ -276,7 +354,15 @@ exports.createMessage = async (req, res) => {
 
     //supprimer le fichier en cas d'erreur
     if (req.file) {
-      deletePhysicalFile(req.file.path);
+      try {
+        await deletePhysicalFile(req.file.path);
+        console.log("Fichier temporaire supprimé après erreur");
+      } catch (deleteError) {
+        console.error(
+          "Erreur lors de la suppression du fichier temporaire:",
+          deleteError
+        );
+      }
     }
 
     res.status(500).json({

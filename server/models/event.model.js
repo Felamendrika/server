@@ -44,7 +44,14 @@ const eventSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-eventSchema.index({ titre: 1 }, { unique: true });
+eventSchema.index(
+  { titre: 1, group_id: 1 },
+  { unique: true, partialFilterExpression: { type: "group" } }
+);
+eventSchema.index(
+  { titre: 1, createur_id: 1 },
+  { unique: true, partialFilterExpression: { type: "private" } }
+);
 eventSchema.index({ description: 1 });
 eventSchema.index({ titre: "text", description: "text" });
 

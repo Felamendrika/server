@@ -9,6 +9,9 @@ router.post("/create", authMiddleware, eventController.createEvent);
 // route pour recuperer tout les evenements
 router.get("/", authMiddleware, eventController.getEvents);
 
+// route pour recuperer tous les événements visibles par l'utilisateur
+router.get("/visible", authMiddleware, eventController.getVisibleEvents);
+
 // route pour recuperer un event par son ID
 router.get("/:eventId", authMiddleware, eventController.getEventById);
 
@@ -26,10 +29,17 @@ router.get("/event/past", authMiddleware, eventController.getPastEvents);
 router.get("/event/user", authMiddleware, eventController.getUserEvents);
 
 // route pour recuperer les events d'un groupe specifique
-router.get("/group/group_id", authMiddleware, eventController.getGroupEvents);
+router.get("/group/:group_id", authMiddleware, eventController.getGroupEvents);
 
 // route pour recuperer les events filtrer par type
 router.get("/event/filter", authMiddleware, eventController.getFilteredEvents);
+
+// route pour creer un evenement avec participants (private)
+router.post(
+  "/create-with-participants",
+  authMiddleware,
+  eventController.createEventWithParticipants
+);
 
 // route pour MAJ event
 router.put("/update/:eventId", authMiddleware, eventController.updateEvent);

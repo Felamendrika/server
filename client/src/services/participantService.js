@@ -33,7 +33,7 @@ export const getParticipants = async (eventId) => {
 // Récupérer tous les événements auxquels l'utilisateur participe
 export const getUserParticipatingEvents = async () => {
   try {
-    const response = await api.get("/participants/event/user");
+    const response = await api.get("/participants/event");
 
     console.log("Event aupauel user participe :", response.data);
     return response.data;
@@ -50,7 +50,7 @@ export const getUserParticipatingEvents = async () => {
 export const removeParticipant = async (eventId, userId) => {
   try {
     const response = await api.delete(
-      `/participants/delete/${eventId}/${userId}`
+      `/participants/${eventId}/delete/${userId}`
     );
     console.log(response.data);
     return response.data;

@@ -181,9 +181,11 @@ export const MessageProvider = ({ children }) => {
             )
           );
 
-          setFichiers((prev) => {
-            prev.filter((fichier) => fichier.message_id !== data.messageId);
-          });
+          setFichiers((prev) =>
+            Array.isArray(prev)
+              ? prev.filter((fichier) => fichier.message_id !== data.messageId)
+              : []
+          );
 
           setConversations((prev) => {
             const updatedConversations = [...prev];

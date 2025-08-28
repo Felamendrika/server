@@ -23,16 +23,25 @@ const storage = multer.diskStorage({
   },
 });
 
-const limits = { fileSize: 50 * 1024 * 1024 }; // limite à 50Mo
+const limits = { fileSize: 2 * 1024 * 1024 * 1024 }; // limite à 2GB
 
 // Filtrer les fichiers selon leur type
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
+    // Documents PDF
     "application/pdf",
+
+    // Images
     "image/jpeg",
     "image/jpg",
     "image/png",
     "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+    "image/svg+xml",
+
+    // Documents Microsoft Office
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel",
@@ -40,13 +49,61 @@ const fileFilter = (req, file, cb) => {
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+
+    // Documents OpenDocument
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.presentation",
+    "application/vnd.oasis.opendocument.graphics",
+
+    // Fichiers texte et code
     "text/plain",
+    "text/html",
+    "text/css",
+    "text/javascript",
+    "text/xml",
+    "application/json",
+    "application/xml",
+    "application/javascript",
+    "application/typescript",
+
+    // Archives
+    "application/zip",
+    "application/x-rar-compressed",
+    "application/x-7z-compressed",
+    "application/x-tar",
+    "application/gzip",
+    "application/x-bzip2",
+
+    // Fichiers de design et graphiques
+    "application/postscript",
+    "application/illustrator",
+    "application/photoshop",
+    "image/vnd.adobe.photoshop",
+    "application/x-photoshop",
+
+    // Fichiers de base de données
+    "application/x-sql",
+    "application/x-database",
+    "application/vnd.ms-access",
+
+    // Fichiers de développement
+    "application/x-python",
+    "application/x-java",
+    "application/x-c++",
+    "application/x-csharp",
+    "text/x-python",
+    "text/x-java-source",
+    "text/x-c++src",
+    "text/x-csharp",
   ];
 
   if (allowedMimeTypes.includes(file.mimetype)) {
-    cb(null, true); // aceper le fichier
+    cb(null, true); // accepter le fichier
   } else {
-    const error = new Error("Type de fichier non autoriser");
+    const error = new Error(
+      `Type de fichier non autorisé: ${file.mimetype}. Types acceptés: PDF, images, documents Office, archives, code, etc.`
+    );
     error.filepath = file.path; // ajoute le chemin pour le supprimer
     cb(error, false);
   }
@@ -61,7 +118,7 @@ const uploadWithProgress = (req, res, next) => {
       if (err instanceof multer.MulterError) {
         if (err.code === "LIMIT_FILE_SIZE") {
           return res.status(400).json({
-            message: "Le fichier est trop volumineux (limite: 50Mo)",
+            message: "Le fichier est trop volumineux (limite: 2GB)",
             error: err.message,
           });
         }

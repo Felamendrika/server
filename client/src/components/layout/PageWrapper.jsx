@@ -1,25 +1,24 @@
-import { Routes, Route } from "react-router-dom"
+import { Route, Routes } from "react-router-dom";
 
-import Messages from "../../pages/Messages"
-import Groups from "../../pages/Groups"
-import Calendrier from "../../pages/Calendrier"
+import Calendrier from "../../pages/Calendrier";
+import Groups from "../../pages/Groups";
+import Messages from "../../pages/Messages";
 
 const PageWrapper = () => {
   return (
     <div className="h-full flex">
-
-    <Routes>
-      {/* Sous-routes pour le pageWrapper */}
+      <Routes>
+        {/* Sous-routes pour le pageWrapper */}
         <Route index element={<Messages />} />
-        <Route path="messages" element={<Messages/>} />
-        <Route path="groups" element={<Groups/>} />
-        <Route path="calendrier" element={<Calendrier/>} />
+        <Route path="messages" element={<Messages />} />
+        <Route path="groups" element={<Groups />} />
+        <Route path="calendrier" element={<Calendrier />} />
 
-                {/* Redirection par defaut  */}
+        {/* Redirection par defaut  */}
         <Route path="/*" element={<Messages />} />
-    </Routes>
+      </Routes>
     </div>
-  )
-}
+  );
+};
 
-export default PageWrapper
+export default PageWrapper;

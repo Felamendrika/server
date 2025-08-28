@@ -162,7 +162,8 @@ const ConversationList = () => {
   }
 
   return (
-    <div className="h-full min-w-[230px] flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg mr-2 shadow-md overflow-hidden">
+    // <div className="h-full min-w-[230px] flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg mr-2 shadow-md overflow-hidden">
+    <div className="h-full w-[280px] flex-shrink-0 flex flex-col bg-gray-50 border-gray-200 border-2 rounded-lg mr-2 shadow-md overflow-hidden">
       <div className="p-3 border-gray-200 ">
         <div className="flex justify-between items-center p-2">
           <h2 className="text-lg font-semibold">Messages</h2>

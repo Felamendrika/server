@@ -14,6 +14,21 @@ export const createEvent = async (eventData) => {
   }
 };
 
+// Créer un événement avec participants (nouvelle méthode)
+export const createEventWithParticipants = async (eventData) => {
+  try {
+    const response = await api.post(
+      "/events/create-with-participants",
+      eventData
+    );
+    console.log("Événement créé avec participants :", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("Erreur dans createEventWithParticipants :", error.message);
+    throw error.response?.data || error;
+  }
+};
+
 export const getEvents = async () => {
   try {
     const response = await api.get("/events");
@@ -22,6 +37,18 @@ export const getEvents = async () => {
     return response.data;
   } catch (error) {
     console.error("Erreur recuperation de evenements :", error.message);
+    throw error.response?.data || error.message;
+  }
+};
+
+// Récupérer les événements filtrés par type
+export const getFilteredEvents = async (type) => {
+  try {
+    const response = await api.get(`/events/filter?type=${type}`);
+    console.log(`Événements ${type} récupérés :`, response.data);
+    return response.data;
+  } catch (error) {
+    console.error(`Erreur récupération événements ${type} :`, error.message);
     throw error.response?.data || error.message;
   }
 };

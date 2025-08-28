@@ -15,16 +15,34 @@ const ALLOWED_FILE_TYPES = [
   "excel",
   "powerpoint",
   "text",
+  "document",
   "application",
+  "archive",
+  "code",
+  "design",
+  "database",
+  "spreadsheet",
+  "presentation",
+  "graphics",
 ];
 
 // Fonction utilitaire pour obtenir le type de fichier
 const getFileType = (mimetype) => {
   const mapping = {
+    // Documents PDF
     "application/pdf": "pdf",
+
+    // Images
     "image/jpeg": "image",
     "image/jpg": "image",
     "image/png": "image",
+    "image/gif": "image",
+    "image/webp": "image",
+    "image/bmp": "image",
+    "image/tiff": "image",
+    "image/svg+xml": "image",
+
+    // Documents Microsoft Office
     "application/msword": "word",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
       "word",
@@ -36,7 +54,53 @@ const getFileType = (mimetype) => {
       "powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.slideshow":
       "powerpoint",
+
+    // Documents OpenDocument
+    "application/vnd.oasis.opendocument.text": "word",
+    "application/vnd.oasis.opendocument.spreadsheet": "excel",
+    "application/vnd.oasis.opendocument.presentation": "powerpoint",
+    "application/vnd.oasis.opendocument.graphics": "graphics",
+
+    // Fichiers texte et code
     "text/plain": "text",
+    "text/html": "code",
+    "text/css": "code",
+    "text/javascript": "code",
+    "text/xml": "code",
+    "application/json": "code",
+    "application/xml": "code",
+    "application/javascript": "code",
+    "application/typescript": "code",
+
+    // Archives
+    "application/zip": "archive",
+    "application/x-rar-compressed": "archive",
+    "application/x-7z-compressed": "archive",
+    "application/x-tar": "archive",
+    "application/gzip": "archive",
+    "application/x-bzip2": "archive",
+
+    // Fichiers de design et graphiques
+    "application/postscript": "design",
+    "application/illustrator": "design",
+    "application/photoshop": "design",
+    "image/vnd.adobe.photoshop": "design",
+    "application/x-photoshop": "design",
+
+    // Fichiers de base de données
+    "application/x-sql": "database",
+    "application/x-database": "database",
+    "application/vnd.ms-access": "database",
+
+    // Fichiers de développement
+    "application/x-python": "code",
+    "application/x-java": "code",
+    "application/x-c++": "code",
+    "application/x-csharp": "code",
+    "text/x-python": "code",
+    "text/x-java-source": "code",
+    "text/x-c++src": "code",
+    "text/x-csharp": "code",
   };
   return mapping[mimetype] || "application";
 };
@@ -104,7 +168,7 @@ exports.uploadAndCreateFile = async (req, res) => {
       deletePhysicalFile(req.file.path);
       return res.status(400).json({
         message:
-          "Type de fichier non autorisé. Types autorisés : PDF, images, Word, Excel, PowerPoint",
+          "Type de fichier non autorisé. Types autorisés : PDF, images, documents Office, archives, code, design, etc.",
       });
     }
 
@@ -400,7 +464,9 @@ exports.deleteFile = async (req, res) => {
       return res.status(404).json({
         message: "Fichier non trouvé",
       });
-    } // Supprimer le fichier physique
+    }
+
+    // Supprimer le fichier physique
     const fichierDeleted = await deletePhysicalFile(fichier.chemin_fichier);
     if (!fichierDeleted) {
       console.warn(
@@ -444,27 +510,71 @@ exports.deleteFile = async (req, res) => {
 exports.cleanupOrphanedFiles = async () => {
   try {
     const uploadDir = path.join(__dirname, "..", "uploads");
+
+    // Vérifier si le dossier uploads existe
+    if (!fs.existsSync(uploadDir)) {
+      console.log("Dossier uploads non trouvé, création...");
+      fs.mkdirSync(uploadDir, { recursive: true });
+      return;
+    }
+
     const files = fs.readdirSync(uploadDir);
+    let deletedCount = 0;
+    let errorCount = 0;
+
+    console.log(
+      `Début du nettoyage des fichiers orphelins. ${files.length} fichiers trouvés.`
+    );
 
     for (const file of files) {
-      const filePath = path.join(uploadDir, file);
-      const stats = fs.statSync(filePath);
+      try {
+        const filePath = path.join(uploadDir, file);
+        const stats = fs.statSync(filePath);
 
-      // Vérifier si le fichier existe dans la base de données
-      const fileInDb = await Fichier.findOne({
-        url: { $regex: file, $options: "i" },
-      });
+        // Ignorer les dossiers
+        if (stats.isDirectory()) {
+          continue;
+        }
 
-      if (!fileInDb) {
-        // Si le fichier n'est pas référencé dans la base de données, le supprimer
-        fs.unlinkSync(filePath);
-        console.log(`Fichier orphelin supprimé: ${file}`);
+        // Vérifier si le fichier existe dans la base de données
+        const fileInDb = await Fichier.findOne({
+          $or: [
+            { chemin_fichier: { $regex: file, $options: "i" } },
+            { nom: { $regex: file, $options: "i" } },
+          ],
+        });
+
+        if (!fileInDb) {
+          // Si le fichier n'est pas référencé dans la base de données, le supprimer
+          fs.unlinkSync(filePath);
+          deletedCount++;
+          console.log(`Fichier orphelin supprimé: ${file}`);
+        }
+      } catch (error) {
+        errorCount++;
+        console.error(
+          `Erreur lors du traitement du fichier ${file}:`,
+          error.message
+        );
       }
     }
 
-    console.log("Nettoyage des fichiers orphelins terminé");
+    console.log(
+      `Nettoyage terminé. ${deletedCount} fichiers supprimés, ${errorCount} erreurs.`
+    );
+
+    return {
+      success: true,
+      deletedCount,
+      errorCount,
+      totalProcessed: files.length,
+    };
   } catch (error) {
     console.error("Erreur lors du nettoyage des fichiers orphelins:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
   }
 };
 

@@ -1,21 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import EmojiPicker from "emoji-picker-react";
 import {
-  FiPaperclip,
-  FiTrash2,
-  FiSmile,
   FiMoreHorizontal,
+  FiPaperclip,
+  FiSmile,
+  FiTrash2,
   FiX,
 } from "react-icons/fi";
-import EmojiPicker from "emoji-picker-react";
 import { toast } from "react-toastify";
 import userAvatar from "../../assets/userAvatar.jpg";
 
 import { format } from "date-fns";
 
-import ConfirmDeleteModal from "../common/ConfirmDeleteModal";
 import { useMessage } from "../../context/MessageContext";
 import { useSocket } from "../../context/SocketContext";
+import ConfirmDeleteModal from "../common/ConfirmDeleteModal";
+import UploadProgress from "./UploadProgress";
 
 const ConversationDisplay = () => {
   const {
@@ -42,6 +43,7 @@ const ConversationDisplay = () => {
   const [filePreview, setFilePreview] = useState([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [openDropdownMessageId, setOpenDropdownMessageId] = useState(null);
+  const [uploadingFiles, setUploadingFiles] = useState([]); // Nouvel état pour les uploads en cours
   // const [isSending, setIsSending] = useState(false); // Nouvel état pour éviter les envois multiples
 
   const scrollRef = useRef(null);
@@ -130,7 +132,6 @@ const ConversationDisplay = () => {
   }, [filePreview]);
 
   const handleSendMessage = async () => {
-    // if (isSending) return; // Évite les envois multiples
     if (!messageContent.length === 0 && !file) {
       toast.warning("Le message est vide. Veuillez saisir du texte");
       return;
@@ -149,22 +150,42 @@ const ConversationDisplay = () => {
         });
         setEditingMessageId(null);
       } else {
-        // setIsSending(true);
+        // Envoi du message avec fichier
         await createMessage(currentConversation._id, messageContent, file);
+
+        // Marquer l'upload comme terminé avec succès
+        if (file) {
+          const completedFile = file;
+          setTimeout(() => {
+            handleUploadComplete(completedFile);
+          }, 100);
+        }
       }
 
-      // await fetchFilesByConversations(currentConversation._id)
       setMessageContent("");
       setFile(null);
       setFilePreview(null);
       setShowEmojiPicker(false);
 
-      // await fetchPrivateConversations(currentConversation._id)
-
       setTimeout(scrollToBottom, 100);
     } catch (error) {
       console.error("Erreur lors de l'envoi du message :", error);
-      toast.error("Erreur lors de l'envoi du message");
+
+      // Gestion spécifique des erreurs d'upload
+      if (error.message && error.message.includes("volumineux")) {
+        toast.error("Le fichier est trop volumineux. Taille maximale : 2GB");
+        // Retirer le fichier de la liste des uploads
+        if (file) {
+          setUploadingFiles((prev) => prev.filter((f) => f !== file));
+        }
+      } else if (error.message && error.message.includes("type")) {
+        toast.error("Type de fichier non autorisé");
+        if (file) {
+          setUploadingFiles((prev) => prev.filter((f) => f !== file));
+        }
+      } else {
+        toast.error("Erreur lors de l'envoi du message");
+      }
     }
   };
 
@@ -214,11 +235,20 @@ const ConversationDisplay = () => {
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
+      // Vérifier la taille du fichier (limite à 2GB)
+      const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
+      if (selectedFile.size > maxSize) {
+        toast.error(`Le fichier est trop volumineux. Taille maximale : 2GB`);
+        return;
+      }
+
       setFile(selectedFile);
       setFileName(selectedFile.name);
 
+      // Ajouter le fichier à la liste des uploads en cours
+      setUploadingFiles((prev) => [...prev, selectedFile]);
+
       if (selectedFile.type.startsWith("image")) {
-        //await previewFile(selectedFile._id)
         const reader = new FileReader();
         reader.onload = (event) => setFilePreview(event.target.result);
         reader.readAsDataURL(selectedFile);
@@ -231,7 +261,27 @@ const ConversationDisplay = () => {
   const handleFileRemove = () => {
     setFile(null);
     setFilePreview(null);
+    // Retirer le fichier de la liste des uploads
+    setUploadingFiles((prev) => prev.filter((f) => f !== file));
   };
+
+  // Gestion des uploads
+  const handleUploadComplete = useCallback((completedFile) => {
+    setUploadingFiles((prev) => prev.filter((f) => f !== completedFile));
+    toast.success(`${completedFile.name} uploadé avec succès !`);
+  }, []);
+
+  const handleUploadCancel = useCallback(
+    (cancelledFile) => {
+      setUploadingFiles((prev) => prev.filter((f) => f !== cancelledFile));
+      if (file === cancelledFile) {
+        setFile(null);
+        setFilePreview(null);
+      }
+      toast.info(`Upload de ${cancelledFile.name} annulé`);
+    },
+    [file]
+  );
 
   const toggleDropdown = (messageId) => {
     setOpenDropdownMessageId((prevId) =>
@@ -245,7 +295,7 @@ const ConversationDisplay = () => {
 
   if (!currentConversation) {
     return (
-      <div className="h-full min-w-[70%] flex flex-col bg-gray-50 border-black rounded-lg pb-4 shadow-sm overflow-hidden text-center text-gray-500 justify-center">
+      <div className="h-full flex-1 flex flex-col bg-gray-50 border-black rounded-lg pb-4 shadow-sm overflow-hidden text-center text-gray-500 justify-center">
         Sélectionnez une conversation pour afficher les messages.
       </div>
     );
@@ -279,6 +329,26 @@ const ConversationDisplay = () => {
           <FiTrash2 size={20} />
         </button>
       </div>
+
+      {/* Affichage des uploads en cours */}
+      {uploadingFiles.length > 0 && (
+        <div className="px-4 py-2 border-b bg-gray-50 w-[50%] rounded-lg">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">
+            Uploads en cours
+          </h4>
+          {/* Pour chaque fichier en cours d'upload, on affiche une barre de progression */}
+          {uploadingFiles.map((uploadFile, index) => (
+            <UploadProgress
+              key={`${uploadFile.name}-${index}`}
+              file={uploadFile}
+              onCancel={handleUploadCancel}
+              onComplete={handleUploadComplete} // Appelé quand l'upload est terminé
+              isUploading={true}
+              uploadStatus="uploading"
+            />
+          ))}
+        </div>
+      )}
 
       {messages.length > 0 ? (
         <div

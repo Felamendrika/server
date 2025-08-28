@@ -13,12 +13,9 @@ exports.addParticipant = async (req, res) => {
     const userId = req.user?._id || req.user?.id;
 
     if (!req.user || !req.user._id || !req.user.id) {
-      return (
-        res.status(401),
-        json({
-          message: "Utilisateur non authentifier",
-        })
-      );
+      return res.status(401).json({
+        message: "Utilisateur non authentifier",
+      });
     }
 
     if (!userId || !isValidObjectId(userId)) {

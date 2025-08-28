@@ -42,6 +42,13 @@ router.delete(
   fichierController.deleteFile
 );
 
+// Nettoyer les fichiers orphelins (admin seulement)
+router.post(
+  "/cleanup-orphaned",
+  authMiddleware,
+  fichierController.cleanupOrphanedFiles
+);
+
 // router.post("/search", authMiddleware, fichierController.searchFile);
 
 // // Route pour previsualiser un fichier (image uniquement)

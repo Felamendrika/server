@@ -229,9 +229,17 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    const userSecure = {
+      nom: user.nom,
+      prenom: user.prenom,
+      pseudo: user.pseudo,
+      avatar: user.avatar,
+    };
+
     res.status(200).json({
       success: true,
-      user: user,
+      user: userSecure,
+      // user: user,
     });
   } catch (error) {
     res.status(500).json({
